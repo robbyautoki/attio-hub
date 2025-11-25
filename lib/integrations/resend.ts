@@ -161,7 +161,7 @@ export class ResendClient {
     // We'll use the emails endpoint with the template
 
     const payload: Record<string, unknown> = {
-      from: "Auto.ki <noreply@auto.ki>",
+      from: "Auto.ki <robby@notifications.auto.ki>",
       to: data.to,
       subject: "Dein Termin steht!",
       // Use Resend's template feature
