@@ -10,6 +10,7 @@ import { getDecryptedApiKeyByService } from "./api-key.service";
 import { incrementExecutionStats } from "./workflow.service";
 import { createAttioClient } from "@/lib/integrations/attio";
 import { createKlaviyoClient } from "@/lib/integrations/klaviyo";
+import { sendSlackNotification, formatExecutionLogForSlack } from "@/lib/integrations/slack";
 
 export type ExecutionStatus = "pending" | "running" | "success" | "failed";
 
@@ -222,8 +223,9 @@ export async function executeCalcomWorkflow(
 
     // Update log with success/partial success
     const durationMs = Date.now() - startTime;
+    const finalStatus = hasCriticalFailure ? "failed" : "success";
     await updateExecutionLog(logId, {
-      status: hasCriticalFailure ? "failed" : "success",
+      status: finalStatus,
       outputPayload: { bookingData, stepLogs },
       stepLogs,
       completedAt: new Date(),
@@ -232,12 +234,24 @@ export async function executeCalcomWorkflow(
 
     // Update workflow stats
     await incrementExecutionStats(workflow.id, !hasCriticalFailure);
+
+    // Send Slack notification
+    await sendSlackNotification(
+      formatExecutionLogForSlack({
+        workflowName: workflow.name,
+        status: finalStatus,
+        durationMs,
+        triggerType: "webhook",
+        stepLogs,
+      })
+    );
   } catch (error) {
     // Handle unexpected errors
     const durationMs = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     await updateExecutionLog(logId, {
       status: "failed",
-      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      errorMessage,
       errorStack: error instanceof Error ? error.stack : undefined,
       stepLogs,
       completedAt: new Date(),
@@ -245,6 +259,19 @@ export async function executeCalcomWorkflow(
     });
 
     await incrementExecutionStats(workflow.id, false);
+
+    // Send Slack notification for errors
+    await sendSlackNotification(
+      formatExecutionLogForSlack({
+        workflowName: workflow.name,
+        status: "failed",
+        durationMs,
+        triggerType: "webhook",
+        stepLogs,
+        errorMessage,
+      })
+    );
+
     throw error;
   }
 }
