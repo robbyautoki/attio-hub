@@ -8,6 +8,7 @@ import {
   ScrollTextIcon,
   WorkflowIcon,
   PlusIcon,
+  CalendarIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -30,6 +31,11 @@ const mainNavItems = [
     title: "Workflows",
     href: "/workflows",
     icon: WorkflowIcon,
+  },
+  {
+    title: "Meetings",
+    href: "/meetings",
+    icon: CalendarIcon,
   },
   {
     title: "Neuer Workflow",
