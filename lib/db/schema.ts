@@ -90,14 +90,58 @@ export const executionLogs = sqliteTable("execution_logs", {
   durationMs: integer("duration_ms"),
 });
 
+// ==================== BOOKINGS ====================
+export const bookings = sqliteTable("bookings", {
+  id: text("id").primaryKey(),
+
+  // Booking details
+  email: text("email").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  phone: text("phone"),
+
+  // Appointment details
+  startTime: integer("start_time", { mode: "timestamp" }).notNull(),
+  endTime: integer("end_time", { mode: "timestamp" }),
+  meetingLink: text("meeting_link"),
+  eventType: text("event_type"), // e.g., "Discovery Call"
+
+  // Cal.com reference
+  calcomBookingId: text("calcom_booking_id"),
+  calcomEventUid: text("calcom_event_uid"),
+
+  // Reminder tracking
+  confirmationSentAt: integer("confirmation_sent_at", { mode: "timestamp" }),
+  reminder24hSentAt: integer("reminder_24h_sent_at", { mode: "timestamp" }),
+  reminder1hSentAt: integer("reminder_1h_sent_at", { mode: "timestamp" }),
+
+  // Status
+  status: text("status").default("confirmed"), // "confirmed" | "cancelled" | "completed"
+
+  // User reference (who owns this workflow)
+  userId: text("user_id").notNull(),
+  workflowId: text("workflow_id").references(() => workflows.id, { onDelete: "set null" }),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 // ==================== RELATIONS ====================
 export const workflowsRelations = relations(workflows, ({ many }) => ({
   executionLogs: many(executionLogs),
+  bookings: many(bookings),
 }));
 
 export const executionLogsRelations = relations(executionLogs, ({ one }) => ({
   workflow: one(workflows, {
     fields: [executionLogs.workflowId],
+    references: [workflows.id],
+  }),
+}));
+
+export const bookingsRelations = relations(bookings, ({ one }) => ({
+  workflow: one(workflows, {
+    fields: [bookings.workflowId],
     references: [workflows.id],
   }),
 }));
@@ -111,3 +155,6 @@ export type NewWorkflow = typeof workflows.$inferInsert;
 
 export type ExecutionLog = typeof executionLogs.$inferSelect;
 export type NewExecutionLog = typeof executionLogs.$inferInsert;
+
+export type Booking = typeof bookings.$inferSelect;
+export type NewBooking = typeof bookings.$inferInsert;

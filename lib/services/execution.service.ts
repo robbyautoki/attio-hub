@@ -8,6 +8,7 @@ import {
 import { eq, desc, and } from "drizzle-orm";
 import { getDecryptedApiKeyByService } from "./api-key.service";
 import { incrementExecutionStats } from "./workflow.service";
+import { createBooking, markConfirmationSent } from "./booking.service";
 import { createAttioClient } from "@/lib/integrations/attio";
 import { createKlaviyoClient } from "@/lib/integrations/klaviyo";
 import { createResendClient } from "@/lib/integrations/resend";
@@ -278,6 +279,65 @@ export async function executeCalcomWorkflow(
       });
     }
 
+    // Store booking in database for reminder tracking
+    if (bookingData.email && bookingData.startTimeRaw) {
+      const stepStartBooking = Date.now();
+      try {
+        const booking = await createBooking({
+          email: bookingData.email,
+          firstName: bookingData.firstName,
+          lastName: bookingData.lastName,
+          phone: bookingData.phone,
+          startTime: new Date(bookingData.startTimeRaw),
+          endTime: bookingData.endTimeRaw ? new Date(bookingData.endTimeRaw) : null,
+          meetingLink: bookingData.meetingLink,
+          eventType: bookingData.eventType,
+          calcomBookingId: bookingData.calcomBookingId,
+          calcomEventUid: bookingData.calcomEventUid,
+          userId: workflow.userId,
+          workflowId: workflow.id,
+        });
+
+        // Mark confirmation as sent if Resend step was successful
+        const resendStepSuccess = stepLogs.some(
+          (s) => s.name.includes("Resend") && s.status === "success"
+        );
+        if (resendStepSuccess) {
+          await markConfirmationSent(booking.id);
+        }
+
+        stepLogs.push({
+          name: "Store Booking for Reminders",
+          status: "success",
+          input: {
+            email: bookingData.email,
+            startTime: bookingData.startTimeRaw,
+            calcomBookingId: bookingData.calcomBookingId,
+          },
+          output: { bookingId: booking.id },
+          durationMs: Date.now() - stepStartBooking,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        stepLogs.push({
+          name: "Store Booking for Reminders",
+          status: "failed",
+          input: { email: bookingData.email, startTime: bookingData.startTimeRaw },
+          error: error instanceof Error ? error.message : "Unknown error",
+          durationMs: Date.now() - stepStartBooking,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      stepLogs.push({
+        name: "Store Booking for Reminders",
+        status: "skipped",
+        error: !bookingData.email ? "No email in payload" : "No start time in payload",
+        durationMs: 0,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     // Check if any critical step failed
     const hasCriticalFailure = stepLogs.some(
       (s) => s.status === "failed" && s.name.includes("Contact")
@@ -352,6 +412,12 @@ function parseCalcomPayload(payload: Record<string, unknown>): {
   datum: string | null;
   uhrzeit: string | null;
   meetingLink: string | null;
+  // For booking storage
+  startTimeRaw: string | null;
+  endTimeRaw: string | null;
+  calcomBookingId: string | null;
+  calcomEventUid: string | null;
+  eventType: string | null;
 } {
   // Cal.com payload structure
   const payloadData = payload.payload as Record<string, unknown> | undefined;
@@ -371,7 +437,8 @@ function parseCalcomPayload(payload: Record<string, unknown>): {
   const website = responses?.website?.value || null;
 
   // Parse booking date and time
-  const startTimeRaw = payloadData?.startTime as string | undefined;
+  const startTimeRaw = (payloadData?.startTime as string) || null;
+  const endTimeRaw = (payloadData?.endTime as string) || null;
   let datum: string | null = null;
   let uhrzeit: string | null = null;
 
@@ -396,6 +463,13 @@ function parseCalcomPayload(payload: Record<string, unknown>): {
   const meetingUrl = payloadData?.meetingUrl as string | undefined;
   const meetingLink = videoCallData || meetingUrl || null;
 
+  // Get Cal.com booking identifiers
+  const calcomBookingId = (payloadData?.bookingId as number)?.toString() ||
+                          (payloadData?.id as number)?.toString() || null;
+  const calcomEventUid = (payloadData?.uid as string) || null;
+  const eventType = (payloadData?.title as string) ||
+                    (payloadData?.eventTitle as string) || "Discovery Call";
+
   return {
     email: (attendee?.email as string) || null,
     name: fullName,
@@ -406,5 +480,10 @@ function parseCalcomPayload(payload: Record<string, unknown>): {
     datum,
     uhrzeit,
     meetingLink,
+    startTimeRaw,
+    endTimeRaw,
+    calcomBookingId,
+    calcomEventUid,
+    eventType,
   };
 }
