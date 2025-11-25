@@ -57,7 +57,7 @@ export class KlaviyoClient {
   }
 
   /**
-   * Create or update a profile in Klaviyo
+   * Create or update a profile in Klaviyo (upsert via profile-import)
    */
   async upsertProfile(data: {
     email: string;
@@ -82,7 +82,8 @@ export class KlaviyoClient {
       },
     };
 
-    return this.request("/profiles/", {
+    // Use profile-import endpoint for upsert behavior (creates or updates)
+    return this.request("/profile-import/", {
       method: "POST",
       body: JSON.stringify(payload),
     });

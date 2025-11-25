@@ -146,11 +146,7 @@ export async function executeCalcomWorkflow(
           firstName: bookingData.firstName,
           lastName: bookingData.lastName,
           phone: bookingData.phone,
-          customFields: {
-            cal_booking_date: bookingData.bookingDate,
-            cal_event_type: bookingData.eventType,
-            cal_booking_status: bookingData.triggerEvent,
-          },
+          website: bookingData.website,
         });
         stepLogs.push({
           name: "Create/Update Attio Contact",
@@ -191,11 +187,6 @@ export async function executeCalcomWorkflow(
           firstName: bookingData.firstName,
           lastName: bookingData.lastName,
           phone: bookingData.phone,
-          properties: {
-            cal_booking_date: bookingData.bookingDate,
-            cal_event_type: bookingData.eventType,
-            cal_booking_status: bookingData.triggerEvent,
-          },
         });
         stepLogs.push({
           name: "Create/Update Klaviyo Profile",
@@ -268,38 +259,31 @@ function parseCalcomPayload(payload: Record<string, unknown>): {
   firstName: string | null;
   lastName: string | null;
   phone: string | null;
-  bookingDate: string | null;
-  eventType: string | null;
-  triggerEvent: string | null;
+  website: string | null;
 } {
-  // Cal.com payload structure can vary
-  const triggerEvent = payload.triggerEvent as string | undefined;
-
-  // Try to find attendee info
-  const attendees = payload.payload as Record<string, unknown> | undefined;
-  const booking = attendees?.booking as Record<string, unknown> | undefined;
-  const attendeeList = (attendees?.attendees || booking?.attendees) as Array<Record<string, unknown>> | undefined;
+  // Cal.com payload structure
+  const payloadData = payload.payload as Record<string, unknown> | undefined;
+  const attendeeList = payloadData?.attendees as Array<Record<string, unknown>> | undefined;
   const attendee = attendeeList?.[0];
+  const responses = payloadData?.responses as Record<string, { value?: string }> | undefined;
 
-  // Extract name parts
-  const fullName = (attendee?.name as string) || (attendees?.name as string) || null;
-  let firstName: string | null = null;
-  let lastName: string | null = null;
+  // Get firstName and lastName directly from attendee (Cal.com provides these)
+  const firstName = (attendee?.firstName as string) || null;
+  const lastName = (attendee?.lastName as string) || null;
+  const fullName = firstName && lastName ? `${firstName} ${lastName}` : (attendee?.name as string) || null;
 
-  if (fullName) {
-    const parts = fullName.split(" ");
-    firstName = parts[0] || null;
-    lastName = parts.slice(1).join(" ") || null;
-  }
+  // Get phone from attendee.phoneNumber (not .phone)
+  const phone = (attendee?.phoneNumber as string) || null;
+
+  // Get website from responses
+  const website = responses?.website?.value || null;
 
   return {
-    email: (attendee?.email as string) || (attendees?.email as string) || null,
+    email: (attendee?.email as string) || null,
     name: fullName,
     firstName,
     lastName,
-    phone: (attendee?.phone as string) || (attendees?.phone as string) || null,
-    bookingDate: (booking?.startTime as string) || (attendees?.startTime as string) || null,
-    eventType: (booking?.title as string) || (attendees?.title as string) || (payload.title as string) || null,
-    triggerEvent: triggerEvent || null,
+    phone,
+    website,
   };
 }

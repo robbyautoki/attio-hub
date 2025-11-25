@@ -74,7 +74,7 @@ export class AttioClient {
     firstName?: string | null;
     lastName?: string | null;
     phone?: string | null;
-    customFields?: Record<string, unknown>;
+    website?: string | null;
   }): Promise<unknown> {
     const payload: AttioCreatePersonPayload = {
       data: {
@@ -100,11 +100,21 @@ export class AttioClient {
       payload.data.values.phone_numbers = [{ phone_number: data.phone }];
     }
 
-    // Add custom fields
-    if (data.customFields) {
-      Object.entries(data.customFields).forEach(([key, value]) => {
-        payload.data.values[key] = value;
-      });
+    // Add website as domain
+    if (data.website) {
+      // Extract domain from website URL if needed
+      let domain = data.website;
+      try {
+        // If it's a full URL, extract the hostname
+        if (domain.includes("://")) {
+          domain = new URL(domain).hostname;
+        }
+        // Remove www. prefix if present
+        domain = domain.replace(/^www\./, "");
+      } catch {
+        // Keep original value if URL parsing fails
+      }
+      payload.data.values.domains = [{ domain }];
     }
 
     // Use assert endpoint for upsert behavior
