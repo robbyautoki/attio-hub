@@ -100,17 +100,15 @@ export async function GET(request: Request) {
           minute: "2-digit",
         });
 
-        // Send 1h reminder email
-        // TODO: Replace with actual template when user provides it
-        await resendClient.sendEmail({
-          from: "Auto.ki <robby@notifications.auto.ki>",
+        // Send 1h reminder email using te-1h template
+        await resendClient.send1hReminderEmail({
           to: booking.email,
-          subject: "Dein Termin startet gleich!",
-          html: build1hReminderHtml({
+          variables: {
             vorname: booking.firstName || "dort",
+            terminart: booking.eventType || "Discovery Call",
             uhrzeit,
-            meetingLink: booking.meetingLink || "",
-          }),
+            ort_oder_link: booking.meetingLink || "Link wird noch gesendet",
+          },
         });
 
         await markReminder1hSent(booking.id);
@@ -173,40 +171,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-}
-
-/**
- * Build HTML for 1h reminder email
- * TODO: Replace with actual Resend template when provided
- */
-function build1hReminderHtml(vars: {
-  vorname: string;
-  uhrzeit: string;
-  meetingLink: string;
-}): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <h1 style="font-size: 24px; margin-bottom: 20px;">Dein Termin startet gleich! 🚀</h1>
-
-  <p>Hey ${vars.vorname},</p>
-
-  <p>Dein Termin startet in einer Stunde um ${vars.uhrzeit} Uhr.</p>
-
-  ${vars.meetingLink ? `
-  <p>Klicke hier um dem Meeting beizutreten:</p>
-  <a href="${vars.meetingLink}" style="display: inline-block; background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 16px 0;">Zum Meeting</a>
-  ` : ""}
-
-  <p>Wir freuen uns auf dich!</p>
-
-  <p>Liebe Grüße</p>
-</body>
-</html>
-  `.trim();
 }

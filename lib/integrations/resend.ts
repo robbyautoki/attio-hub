@@ -274,6 +274,77 @@ export class ResendClient {
   }
 
   /**
+   * Send a 1h reminder email using Resend
+   * Template: te-1h (1h reminder)
+   * Variables: vorname, terminart, uhrzeit, ort_oder_link
+   */
+  async send1hReminderEmail(data: {
+    to: string;
+    variables: {
+      vorname: string;
+      terminart: string;
+      uhrzeit: string;
+      ort_oder_link: string;
+    };
+  }): Promise<unknown> {
+    const { vorname, terminart, uhrzeit, ort_oder_link } = data.variables;
+
+    const html = this.build1hReminderHtml({
+      vorname,
+      terminart,
+      uhrzeit,
+      ort_oder_link,
+    });
+
+    return this.request("/emails", {
+      method: "POST",
+      body: JSON.stringify({
+        from: "Robby <robby@notifications.auto.ki>",
+        to: data.to,
+        subject: "Unser Termin beginnt gleich",
+        html,
+      }),
+    });
+  }
+
+  /**
+   * Build HTML for 1h reminder email (matches te-1h template)
+   */
+  private build1hReminderHtml(vars: {
+    vorname: string;
+    terminart: string;
+    uhrzeit: string;
+    ort_oder_link: string;
+  }): string {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="font-size: 28px; margin-bottom: 24px;">In einer Stunde geht's los! ⏰</h1>
+
+  <p>Hey ${vars.vorname},</p>
+
+  <p>der Alltag kann ganz schön turbulent sein – deshalb wollten wir uns nochmal kurz bei dir melden. In einer Stunde startet dein Termin:</p>
+
+  <p><strong>Was:</strong> ${vars.terminart}</p>
+  <p><strong>Wann:</strong> Heute um ${vars.uhrzeit} Uhr</p>
+  <p><strong>Wo:</strong> <a href="${vars.ort_oder_link}" style="color: #0066cc;">${vars.ort_oder_link}</a></p>
+
+  <p>Schnapp dir vielleicht noch einen Kaffee, mach den Browser-Tab schon mal auf und dann kann's losgehen. Wir freuen uns, dich gleich zu sehen!</p>
+
+  <p>Liebe Grüße</p>
+
+  <p style="margin-top: 24px;"><strong>auto.ki</strong></p>
+</body>
+</html>
+    `.trim();
+  }
+
+  /**
    * Build HTML for booking confirmation
    * This matches the Resend template "terminbesttigung"
    */
