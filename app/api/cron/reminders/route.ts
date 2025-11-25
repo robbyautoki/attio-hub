@@ -55,18 +55,17 @@ export async function GET(request: Request) {
           minute: "2-digit",
         });
 
-        // Send 24h reminder email
-        // TODO: Replace with actual template when user provides it
-        await resendClient.sendEmail({
-          from: "Auto.ki <robby@notifications.auto.ki>",
+        // Send 24h reminder email using te-24h template
+        await resendClient.sendReminderEmail({
           to: booking.email,
-          subject: "Erinnerung: Dein Termin morgen!",
-          html: build24hReminderHtml({
+          templateSlug: "te-24h",
+          variables: {
             vorname: booking.firstName || "dort",
+            terminart: booking.eventType || "Discovery Call",
             datum,
             uhrzeit,
-            meetingLink: booking.meetingLink || "",
-          }),
+            ort_oder_link: booking.meetingLink || "Link wird noch gesendet",
+          },
         });
 
         await markReminder24hSent(booking.id);
@@ -174,43 +173,6 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-}
-
-/**
- * Build HTML for 24h reminder email
- * TODO: Replace with actual Resend template when provided
- */
-function build24hReminderHtml(vars: {
-  vorname: string;
-  datum: string;
-  uhrzeit: string;
-  meetingLink: string;
-}): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <h1 style="font-size: 24px; margin-bottom: 20px;">Erinnerung: Dein Termin morgen! ⏰</h1>
-
-  <p>Hey ${vars.vorname},</p>
-
-  <p>nur eine kurze Erinnerung: Morgen steht dein Termin an!</p>
-
-  <p><strong>Wann:</strong> ${vars.datum} um ${vars.uhrzeit} Uhr</p>
-  ${vars.meetingLink ? `<p><strong>Meeting-Link:</strong> <a href="${vars.meetingLink}" style="color: #0066cc;">${vars.meetingLink}</a></p>` : ""}
-
-  <p>Falls du den Termin verschieben musst, melde dich einfach kurz bei uns.</p>
-
-  <p>Bis morgen!</p>
-
-  <p>Liebe Grüße</p>
-</body>
-</html>
-  `.trim();
 }
 
 /**

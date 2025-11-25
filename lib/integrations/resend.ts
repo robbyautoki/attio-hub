@@ -185,6 +185,95 @@ export class ResendClient {
   }
 
   /**
+   * Send a reminder email using Resend Broadcast with template
+   * Template: te-24h (24h reminder)
+   * Variables: vorname, terminart, datum, uhrzeit, ort_oder_link
+   */
+  async sendReminderEmail(data: {
+    to: string;
+    templateSlug: string;
+    variables: {
+      vorname: string;
+      terminart: string;
+      datum: string;
+      uhrzeit: string;
+      ort_oder_link: string;
+    };
+  }): Promise<unknown> {
+    // Resend Broadcast API für Template-Emails
+    // POST /broadcasts/{broadcast_id}/send
+    // Da wir die Broadcast ID nicht haben, bauen wir das HTML selbst
+    // basierend auf dem Template-Design
+
+    const { vorname, terminart, datum, uhrzeit, ort_oder_link } = data.variables;
+
+    const html = this.buildReminderHtml({
+      vorname,
+      terminart,
+      datum,
+      uhrzeit,
+      ort_oder_link,
+    });
+
+    return this.request("/emails", {
+      method: "POST",
+      body: JSON.stringify({
+        from: "Robby <robby@notifications.auto.ki>",
+        to: data.to,
+        subject: "Kleine Erinnerung für Morgen",
+        html,
+      }),
+    });
+  }
+
+  /**
+   * Build HTML for reminder email (matches te-24h template)
+   */
+  private buildReminderHtml(vars: {
+    vorname: string;
+    terminart: string;
+    datum: string;
+    uhrzeit: string;
+    ort_oder_link: string;
+  }): string {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="font-size: 28px; margin-bottom: 24px;">Morgen ist es soweit ☀️</h1>
+
+  <p>Hey ${vars.vorname},</p>
+
+  <p>wir wissen, wie schnell die Tage manchmal verfliegen – zwischen E-Mails, Meetings und To-do-Listen kann man leicht mal was übersehen. Deshalb hier ein freundlicher Reminder von uns:</p>
+
+  <p>Morgen steht dein Termin an:</p>
+
+  <p><strong>Was:</strong> ${vars.terminart}</p>
+  <p><strong>Wann:</strong> ${vars.datum} um ${vars.uhrzeit} Uhr</p>
+  <p><strong>Wo:</strong> <a href="${vars.ort_oder_link}" style="color: #0066cc;">${vars.ort_oder_link}</a></p>
+
+  <p>Trag ihn dir am besten nochmal kurz in den Kalender ein, falls noch nicht geschehen. Und falls dir was dazwischengekommen ist – kein Stress!<br>
+  Melde dich einfach kurz bei uns, dann finden wir einen neuen Termin.</p>
+
+  <p>Du willst dich vorab schon ein bisschen einstimmen? In unserer Academy findest du hilfreiche Inhalte, die dir den Einstieg erleichtern:</p>
+
+  <a href="https://academy.auto.ki" style="display: inline-block; background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 16px 0;">Zur Academy</a>
+
+  <p>Wir freuen uns auf morgen!</p>
+
+  <p>Liebe Grüße</p>
+
+  <p style="margin-top: 24px;"><strong>auto.ki</strong></p>
+</body>
+</html>
+    `.trim();
+  }
+
+  /**
    * Build HTML for booking confirmation
    * This matches the Resend template "terminbesttigung"
    */
