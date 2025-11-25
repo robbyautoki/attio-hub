@@ -3,12 +3,13 @@ import { apiKeys, type ApiKey, type NewApiKey } from "@/lib/db/schema";
 import { encrypt, decrypt, getKeyHint } from "@/lib/crypto";
 import { eq, and } from "drizzle-orm";
 
-export type ServiceType = "attio" | "klaviyo" | "calcom";
+export type ServiceType = "attio" | "klaviyo" | "calcom" | "resend";
 
 export const SERVICE_LABELS: Record<ServiceType, string> = {
   attio: "Attio CRM",
   klaviyo: "Klaviyo",
   calcom: "Cal.com",
+  resend: "Resend",
 };
 
 /**

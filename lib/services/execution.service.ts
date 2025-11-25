@@ -146,7 +146,6 @@ export async function executeCalcomWorkflow(
           firstName: bookingData.firstName,
           lastName: bookingData.lastName,
           phone: bookingData.phone,
-          website: bookingData.website,
         });
         stepLogs.push({
           name: "Create/Update Attio Contact",

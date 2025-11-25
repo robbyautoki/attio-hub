@@ -50,6 +50,7 @@ const SERVICE_OPTIONS = [
   { value: "attio", label: "Attio CRM" },
   { value: "klaviyo", label: "Klaviyo" },
   { value: "calcom", label: "Cal.com" },
+  { value: "resend", label: "Resend" },
 ];
 
 export default function ApiKeysPage() {

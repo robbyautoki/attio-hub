@@ -34,6 +34,12 @@ export const SERVICE_METADATA: Record<
     docsUrl: "https://cal.com/docs/api",
     placeholder: "cal_live_...",
   },
+  resend: {
+    name: "Resend",
+    description: "E-Mail API für Entwickler",
+    docsUrl: "https://resend.com/docs",
+    placeholder: "re_...",
+  },
 };
 
 /**
@@ -58,6 +64,23 @@ export async function testIntegrationConnection(
         success: true,
         message: "Cal.com Webhook Secret gespeichert. Konfiguriere den Webhook in Cal.com.",
       };
+    }
+    case "resend": {
+      // Test Resend API key by fetching domains
+      try {
+        const response = await fetch("https://api.resend.com/domains", {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        if (response.ok) {
+          return { success: true, message: "Verbindung erfolgreich!" };
+        }
+        return { success: false, message: `API Fehler: ${response.status}` };
+      } catch (error) {
+        return {
+          success: false,
+          message: error instanceof Error ? error.message : "Verbindung fehlgeschlagen",
+        };
+      }
     }
     default:
       return { success: false, message: "Unbekannter Service" };
