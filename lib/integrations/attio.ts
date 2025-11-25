@@ -12,7 +12,7 @@ export interface AttioCreatePersonPayload {
     values: {
       email_addresses?: Array<{ email_address: string }>;
       name?: Array<{ first_name?: string; last_name?: string; full_name?: string }>;
-      phone_numbers?: Array<{ phone_number: string }>;
+      phone_numbers?: Array<{ original_phone_number: string }>;
       [key: string]: unknown;
     };
   };
@@ -96,7 +96,7 @@ export class AttioClient {
 
     // Add phone
     if (data.phone) {
-      payload.data.values.phone_numbers = [{ phone_number: data.phone }];
+      payload.data.values.phone_numbers = [{ original_phone_number: data.phone }];
     }
 
     // Use assert endpoint for upsert behavior
