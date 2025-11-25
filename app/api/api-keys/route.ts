@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     }
 
     // Validate service type
-    const validServices: ServiceType[] = ["attio", "klaviyo", "calcom"];
+    const validServices: ServiceType[] = ["attio", "klaviyo", "calcom", "resend"];
     if (!validServices.includes(service)) {
       return NextResponse.json(
         { error: "Ungültiger Service-Typ" },
