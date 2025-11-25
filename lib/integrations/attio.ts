@@ -66,7 +66,7 @@ export class AttioClient {
   }
 
   /**
-   * Create or update a person in Attio
+   * Create or update a person in Attio (upsert by email)
    */
   async upsertPerson(data: {
     email: string;
@@ -75,17 +75,13 @@ export class AttioClient {
     lastName?: string | null;
     phone?: string | null;
   }): Promise<unknown> {
-    const payload: AttioCreatePersonPayload = {
-      data: {
-        values: {
-          email_addresses: [{ email_address: data.email }],
-        },
-      },
+    const values: Record<string, unknown> = {
+      email_addresses: [{ email_address: data.email }],
     };
 
     // Add name
     if (data.name || data.firstName || data.lastName) {
-      payload.data.values.name = [
+      values.name = [
         {
           full_name: data.name || undefined,
           first_name: data.firstName || undefined,
@@ -96,13 +92,16 @@ export class AttioClient {
 
     // Add phone
     if (data.phone) {
-      payload.data.values.phone_numbers = [{ original_phone_number: data.phone }];
+      values.phone_numbers = [{ original_phone_number: data.phone }];
     }
 
-    // Use assert endpoint for upsert behavior
-    return this.request("/objects/people/records", {
-      method: "POST",
-      body: JSON.stringify(payload),
+    // Use PUT with matching_attribute for upsert behavior
+    // This creates if not exists, updates if exists (matched by email)
+    return this.request("/objects/people/records?matching_attribute=email_addresses", {
+      method: "PUT",
+      body: JSON.stringify({
+        data: { values },
+      }),
     });
   }
 
