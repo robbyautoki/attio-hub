@@ -10,6 +10,7 @@ import { getDecryptedApiKeyByService } from "./api-key.service";
 import { incrementExecutionStats } from "./workflow.service";
 import { createAttioClient } from "@/lib/integrations/attio";
 import { createKlaviyoClient } from "@/lib/integrations/klaviyo";
+import { createResendClient } from "@/lib/integrations/resend";
 import { sendSlackNotification, formatExecutionLogForSlack } from "@/lib/integrations/slack";
 
 export type ExecutionStatus = "pending" | "running" | "success" | "failed";
@@ -216,6 +217,67 @@ export async function executeCalcomWorkflow(
       });
     }
 
+    // Execute Resend step - Send confirmation email with 1 minute delay
+    const resendKey = await getDecryptedApiKeyByService(workflow.userId, "resend");
+    if (resendKey && bookingData.email && bookingData.firstName) {
+      const stepStartResend = Date.now();
+      try {
+        const resendClient = createResendClient(resendKey);
+
+        // Schedule email for 1 minute from now
+        const scheduledAt = new Date(Date.now() + 60 * 1000); // 1 minute delay
+
+        const resendResult = await resendClient.sendBookingConfirmation({
+          to: bookingData.email,
+          vorname: bookingData.firstName,
+          datum: bookingData.datum || "TBD",
+          uhrzeit: bookingData.uhrzeit || "TBD",
+          meetingLink: bookingData.meetingLink || "Link wird noch gesendet",
+          scheduledAt,
+        });
+
+        stepLogs.push({
+          name: "Send Booking Confirmation Email (Resend)",
+          status: "success",
+          input: {
+            to: bookingData.email,
+            vorname: bookingData.firstName,
+            datum: bookingData.datum,
+            uhrzeit: bookingData.uhrzeit,
+            meetingLink: bookingData.meetingLink,
+            scheduledAt: scheduledAt.toISOString(),
+          },
+          output: resendResult,
+          durationMs: Date.now() - stepStartResend,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        stepLogs.push({
+          name: "Send Booking Confirmation Email (Resend)",
+          status: "failed",
+          input: {
+            to: bookingData.email,
+            vorname: bookingData.firstName,
+          },
+          error: error instanceof Error ? error.message : "Unknown error",
+          durationMs: Date.now() - stepStartResend,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      stepLogs.push({
+        name: "Send Booking Confirmation Email (Resend)",
+        status: "skipped",
+        error: !resendKey
+          ? "No Resend API key configured"
+          : !bookingData.email
+            ? "No email in payload"
+            : "No firstName in payload",
+        durationMs: 0,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     // Check if any critical step failed
     const hasCriticalFailure = stepLogs.some(
       (s) => s.status === "failed" && s.name.includes("Contact")
@@ -286,6 +348,10 @@ function parseCalcomPayload(payload: Record<string, unknown>): {
   lastName: string | null;
   phone: string | null;
   website: string | null;
+  // Additional fields for email template
+  datum: string | null;
+  uhrzeit: string | null;
+  meetingLink: string | null;
 } {
   // Cal.com payload structure
   const payloadData = payload.payload as Record<string, unknown> | undefined;
@@ -304,6 +370,32 @@ function parseCalcomPayload(payload: Record<string, unknown>): {
   // Get website from responses
   const website = responses?.website?.value || null;
 
+  // Parse booking date and time
+  const startTimeRaw = payloadData?.startTime as string | undefined;
+  let datum: string | null = null;
+  let uhrzeit: string | null = null;
+
+  if (startTimeRaw) {
+    const startDate = new Date(startTimeRaw);
+    // Format: "25. November 2025"
+    datum = startDate.toLocaleDateString("de-DE", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    // Format: "14:30"
+    uhrzeit = startDate.toLocaleTimeString("de-DE", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  // Get meeting link from metadata or videoCallData
+  const metadata = payloadData?.metadata as Record<string, unknown> | undefined;
+  const videoCallData = metadata?.videoCallUrl as string | undefined;
+  const meetingUrl = payloadData?.meetingUrl as string | undefined;
+  const meetingLink = videoCallData || meetingUrl || null;
+
   return {
     email: (attendee?.email as string) || null,
     name: fullName,
@@ -311,5 +403,8 @@ function parseCalcomPayload(payload: Record<string, unknown>): {
     lastName,
     phone,
     website,
+    datum,
+    uhrzeit,
+    meetingLink,
   };
 }
