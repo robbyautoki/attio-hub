@@ -12,7 +12,7 @@ import { createBooking, markConfirmationSent } from "./booking.service";
 import { createAttioClient } from "@/lib/integrations/attio";
 import { createKlaviyoClient } from "@/lib/integrations/klaviyo";
 import { createResendClient } from "@/lib/integrations/resend";
-import { sendSlackNotification, formatExecutionLogForSlack } from "@/lib/integrations/slack";
+import { sendSlackNotification } from "@/lib/integrations/slack";
 
 export type ExecutionStatus = "pending" | "running" | "success" | "failed";
 
@@ -388,16 +388,11 @@ export async function executeCalcomWorkflow(
     // Update workflow stats
     await incrementExecutionStats(workflow.id, !hasCriticalFailure);
 
-    // Send Slack notification
-    await sendSlackNotification(
-      formatExecutionLogForSlack({
-        workflowName: workflow.name,
-        status: finalStatus,
-        durationMs,
-        triggerType: "webhook",
-        stepLogs,
-      })
-    );
+    // Send compact Slack notification
+    const emoji = finalStatus === "success" ? "✅" : "❌";
+    await sendSlackNotification({
+      text: `${emoji} ${workflow.name}: ${bookingData.firstName || "Unbekannt"} (${bookingData.email})`,
+    });
   } catch (error) {
     // Handle unexpected errors
     const durationMs = Date.now() - startTime;
@@ -413,17 +408,10 @@ export async function executeCalcomWorkflow(
 
     await incrementExecutionStats(workflow.id, false);
 
-    // Send Slack notification for errors
-    await sendSlackNotification(
-      formatExecutionLogForSlack({
-        workflowName: workflow.name,
-        status: "failed",
-        durationMs,
-        triggerType: "webhook",
-        stepLogs,
-        errorMessage,
-      })
-    );
+    // Send compact Slack error notification
+    await sendSlackNotification({
+      text: `❌ ${workflow.name} Fehler: ${errorMessage}`,
+    });
 
     throw error;
   }
