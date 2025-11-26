@@ -103,20 +103,9 @@ function formatAcademyEvent(payload: Record<string, unknown>): string {
 /**
  * Add a person to the Academy list in Attio
  * Uses the Attio Lists API to add entries
+ * @param recordId - The record ID from the upsertPerson result
  */
-async function addPersonToAcademyList(apiKey: string, email: string): Promise<void> {
-  // First, find the person by email to get their record ID
-  const attioClient = createAttioClient(apiKey);
-  const searchResult = await attioClient.findPersonByEmail(email) as {
-    data?: Array<{ id?: { record_id?: string } }>;
-  };
-
-  const personRecordId = searchResult?.data?.[0]?.id?.record_id;
-  if (!personRecordId) {
-    console.log("Person not found in Attio, skipping list add");
-    return;
-  }
-
+async function addPersonToAcademyList(apiKey: string, recordId: string): Promise<void> {
   // Add person to the Academy list
   // Attio Lists API: POST /v2/lists/{list_id}/entries
   const response = await fetch(`https://api.attio.com/v2/lists/${ACADEMY_LIST_ID}/entries`, {
@@ -127,7 +116,7 @@ async function addPersonToAcademyList(apiKey: string, email: string): Promise<vo
     },
     body: JSON.stringify({
       data: {
-        parent_record_id: personRecordId,
+        parent_record_id: recordId,
         parent_object: "people",
         entry_values: {},
       },
@@ -233,10 +222,13 @@ export async function POST(request: Request) {
               name: fullName || undefined,
               firstName: firstName || undefined,
               lastName: lastName || undefined,
-            });
+            }) as { data?: { id?: { record_id?: string } } };
 
-            // Add to Academy list
-            await addPersonToAcademyList(attioApiKey, email);
+            // Extract record_id from upsert result and add to Academy list
+            const recordId = attioResult?.data?.id?.record_id;
+            if (recordId) {
+              await addPersonToAcademyList(attioApiKey, recordId);
+            }
 
             stepLogs.push({
               name: "Add to Attio Academy List",
