@@ -81,15 +81,13 @@ export class AttioClient {
       email_addresses: [{ email_address: data.email }],
     };
 
-    // Add name
+    // Add name - only include fields that have actual values (Attio rejects undefined)
     if (data.name || data.firstName || data.lastName) {
-      values.name = [
-        {
-          full_name: data.name || undefined,
-          first_name: data.firstName || undefined,
-          last_name: data.lastName || undefined,
-        },
-      ];
+      const nameObj: { full_name?: string; first_name?: string; last_name?: string } = {};
+      if (data.name) nameObj.full_name = data.name;
+      if (data.firstName) nameObj.first_name = data.firstName;
+      if (data.lastName) nameObj.last_name = data.lastName;
+      values.name = [nameObj];
     }
 
     // Add phone
