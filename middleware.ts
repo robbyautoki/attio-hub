@@ -5,6 +5,9 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhooks/(.*)", // Webhooks must be public for external services
+  "/api/auth/callback/google", // Google OAuth callback
+  "/api/auth/gmail", // Gmail OAuth start
+  "/api/cron/(.*)", // Cron jobs
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
