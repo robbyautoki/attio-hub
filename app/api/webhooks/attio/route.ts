@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { markBookingAsNoShow, getBookingByEmail } from "@/lib/services/booking.service";
-import { sendSlackNotification, formatExecutionLogForSlack } from "@/lib/integrations/slack";
+import { sendSlackNotification } from "@/lib/integrations/slack";
 import { createResendClient } from "@/lib/integrations/resend";
 import { getDecryptedApiKeyByService } from "@/lib/services/api-key.service";
 import { getWorkflowByWebhookPath, incrementExecutionStats } from "@/lib/services/workflow.service";
@@ -306,17 +306,7 @@ export async function POST(request: Request) {
         durationMs,
       });
       await incrementExecutionStats(workflow.id, !hasCriticalFailure);
-
-      // Send execution summary to Slack
-      await sendSlackNotification(
-        formatExecutionLogForSlack({
-          workflowName: workflow.name,
-          status: finalStatus,
-          durationMs,
-          triggerType: "webhook",
-          stepLogs,
-        })
-      );
+      // Detailed logs are saved to DB and shown in frontend - no verbose Slack summary needed
     }
 
     return NextResponse.json({
@@ -346,24 +336,13 @@ export async function POST(request: Request) {
         durationMs,
       });
       await incrementExecutionStats(workflow.id, false);
-
-      // Send error summary to Slack
-      await sendSlackNotification(
-        formatExecutionLogForSlack({
-          workflowName: workflow.name,
-          status: "failed",
-          durationMs,
-          triggerType: "webhook",
-          stepLogs,
-          errorMessage,
-        })
-      );
-    } else {
-      // Send compact error to Slack if no workflow found
-      await sendSlackNotification({
-        text: `❌ Attio Webhook Fehler: ${errorMessage}`,
-      });
+      // Detailed error logs are saved to DB and shown in frontend
     }
+
+    // Send compact error to Slack
+    await sendSlackNotification({
+      text: `❌ Attio Webhook Fehler: ${errorMessage}`,
+    });
 
     return NextResponse.json(
       {
