@@ -74,6 +74,8 @@ export class AttioClient {
     firstName?: string | null;
     lastName?: string | null;
     phone?: string | null;
+    bookingStatus?: string | null;
+    meetingType?: string | null;
   }): Promise<unknown> {
     const values: Record<string, unknown> = {
       email_addresses: [{ email_address: data.email }],
@@ -93,6 +95,16 @@ export class AttioClient {
     // Add phone
     if (data.phone) {
       values.phone_numbers = [{ original_phone_number: data.phone }];
+    }
+
+    // Add booking_status (select field)
+    if (data.bookingStatus) {
+      values.booking_status = data.bookingStatus;
+    }
+
+    // Add meeting_type (select or text field)
+    if (data.meetingType) {
+      values.meeting_type = data.meetingType;
     }
 
     // Use PUT with matching_attribute for upsert behavior
