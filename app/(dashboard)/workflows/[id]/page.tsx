@@ -249,7 +249,9 @@ export default function WorkflowDetailPage({
             <CardHeader>
               <CardTitle>Webhook-Konfiguration</CardTitle>
               <CardDescription>
-                Kopiere diese URL und füge sie in Cal.com unter Webhooks ein
+                {workflow.triggerConfig?.provider === "attio"
+                  ? "Kopiere diese URL und füge sie in Attio unter Webhooks ein"
+                  : "Kopiere diese URL und füge sie in Cal.com unter Webhooks ein"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -287,16 +289,29 @@ export default function WorkflowDetailPage({
                 </div>
               )}
 
-              <div className="rounded-lg bg-muted p-4">
-                <h4 className="font-medium mb-2">Cal.com Einrichtung:</h4>
-                <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
-                  <li>Gehe zu Cal.com → Settings → Webhooks</li>
-                  <li>Klicke auf &quot;New Webhook&quot;</li>
-                  <li>Füge die Webhook URL oben ein</li>
-                  <li>Wähle die Events: BOOKING_CREATED, BOOKING_RESCHEDULED, BOOKING_CANCELLED</li>
-                  <li>Speichern und aktiviere den Workflow hier</li>
-                </ol>
-              </div>
+              {workflow.triggerConfig?.provider === "attio" ? (
+                <div className="rounded-lg bg-muted p-4">
+                  <h4 className="font-medium mb-2">Attio Einrichtung:</h4>
+                  <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
+                    <li>Gehe zu Attio → Settings → Webhooks</li>
+                    <li>Klicke auf &quot;Create Webhook&quot;</li>
+                    <li>Füge die Webhook URL oben ein</li>
+                    <li>Wähle das Event: record.attribute-value.updated</li>
+                    <li>Speichern und aktiviere den Workflow hier</li>
+                  </ol>
+                </div>
+              ) : (
+                <div className="rounded-lg bg-muted p-4">
+                  <h4 className="font-medium mb-2">Cal.com Einrichtung:</h4>
+                  <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
+                    <li>Gehe zu Cal.com → Settings → Webhooks</li>
+                    <li>Klicke auf &quot;New Webhook&quot;</li>
+                    <li>Füge die Webhook URL oben ein</li>
+                    <li>Wähle die Events: BOOKING_CREATED, BOOKING_RESCHEDULED, BOOKING_CANCELLED</li>
+                    <li>Speichern und aktiviere den Workflow hier</li>
+                  </ol>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
