@@ -418,6 +418,82 @@ export class ResendClient {
   }
 
   /**
+   * Send a "Meeting Running - Person Missing" email
+   * Sent when meeting has started but attendee hasn't joined
+   * Variables: vorname, terminart, uhrzeit, meetingLink
+   */
+  async sendMeetingRunningEmail(data: {
+    to: string;
+    variables: {
+      vorname: string;
+      terminart: string;
+      uhrzeit: string;
+      meetingLink: string;
+    };
+  }): Promise<unknown> {
+    const { vorname, terminart, uhrzeit, meetingLink } = data.variables;
+
+    const html = this.buildMeetingRunningHtml({
+      vorname,
+      terminart,
+      uhrzeit,
+      meetingLink,
+    });
+
+    return this.request("/emails", {
+      method: "POST",
+      body: JSON.stringify({
+        from: "Robby <robby@notifications.auto.ki>",
+        to: data.to,
+        subject: "Dein Meeting läuft gerade – wir warten auf dich!",
+        html,
+      }),
+    });
+  }
+
+  /**
+   * Build HTML for Meeting Running email
+   */
+  private buildMeetingRunningHtml(vars: {
+    vorname: string;
+    terminart: string;
+    uhrzeit: string;
+    meetingLink: string;
+  }): string {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="font-size: 28px; margin-bottom: 24px;">Dein Meeting läuft gerade! 🎥</h1>
+
+  <p>Hey ${vars.vorname},</p>
+
+  <p>wir sitzen gerade im Meeting und warten auf dich! Das Gespräch hat um <strong>${vars.uhrzeit} Uhr</strong> begonnen.</p>
+
+  <p><strong>Was:</strong> ${vars.terminart}</p>
+  <p><strong>Gestartet um:</strong> ${vars.uhrzeit} Uhr</p>
+
+  <p>Klicke einfach auf den Button, um direkt beizutreten:</p>
+
+  <a href="${vars.meetingLink}" style="display: inline-block; background-color: #22c55e; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 4px; margin: 16px 0; font-weight: bold;">Jetzt beitreten</a>
+
+  <p>Falls du es heute nicht schaffst, melde dich kurz bei uns – dann finden wir einen neuen Termin.</p>
+
+  <p>Bis gleich!</p>
+
+  <p>Liebe Grüße</p>
+
+  <p style="margin-top: 24px;"><strong>auto.ki</strong></p>
+</body>
+</html>
+    `.trim();
+  }
+
+  /**
    * Build HTML for booking confirmation
    * This matches the Resend template "terminbesttigung"
    */
