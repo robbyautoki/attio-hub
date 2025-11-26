@@ -5,6 +5,11 @@ import { createResendClient } from "@/lib/integrations/resend";
 import { getDecryptedApiKeyByService } from "@/lib/services/api-key.service";
 import { getWorkflowByWebhookPath, incrementExecutionStats } from "@/lib/services/workflow.service";
 import { createExecutionLog, updateExecutionLog } from "@/lib/services/execution.service";
+import {
+  sendThankYouDiscoveryEmail as sendGmailThankYouDiscovery,
+  sendThankYouStrategieEmail as sendGmailThankYouStrategie,
+  isGmailConfigured,
+} from "@/lib/integrations/gmail";
 
 // Attio Webhook Handler for booking status changes
 // Handles: "No-Show", "Meeting läuft - Person fehlt", and "Termin abgeschlossen"
@@ -518,7 +523,20 @@ async function sendThankYouDiscoveryEmail(
   firstName: string | undefined
 ): Promise<boolean> {
   try {
-    // Get user ID from booking or use a default admin user
+    const vorname = booking?.firstName || firstName || "dort";
+
+    // Try Gmail first if configured (emails from matthias@auto.ki)
+    if (isGmailConfigured()) {
+      try {
+        await sendGmailThankYouDiscovery({ to: email, vorname });
+        console.log(`Thank You Discovery email sent via Gmail to ${email}`);
+        return true;
+      } catch (gmailError) {
+        console.error("Gmail failed, falling back to Resend:", gmailError);
+      }
+    }
+
+    // Fallback to Resend
     const userId = booking?.userId;
     if (!userId) {
       console.log("No booking found - cannot determine user for API key");
@@ -536,11 +554,11 @@ async function sendThankYouDiscoveryEmail(
     await resendClient.sendThankYouDiscoveryEmail({
       to: email,
       variables: {
-        vorname: booking?.firstName || firstName || "dort",
+        vorname,
       },
     });
 
-    console.log(`Thank You Discovery email sent to ${email}`);
+    console.log(`Thank You Discovery email sent via Resend to ${email}`);
     return true;
   } catch (emailError) {
     console.error("Failed to send Thank You Discovery email:", emailError);
@@ -558,7 +576,20 @@ async function sendThankYouStrategieEmail(
   firstName: string | undefined
 ): Promise<boolean> {
   try {
-    // Get user ID from booking or use a default admin user
+    const vorname = booking?.firstName || firstName || "dort";
+
+    // Try Gmail first if configured (emails from matthias@auto.ki)
+    if (isGmailConfigured()) {
+      try {
+        await sendGmailThankYouStrategie({ to: email, vorname });
+        console.log(`Thank You Strategie email sent via Gmail to ${email}`);
+        return true;
+      } catch (gmailError) {
+        console.error("Gmail failed, falling back to Resend:", gmailError);
+      }
+    }
+
+    // Fallback to Resend
     const userId = booking?.userId;
     if (!userId) {
       console.log("No booking found - cannot determine user for API key");
@@ -576,11 +607,11 @@ async function sendThankYouStrategieEmail(
     await resendClient.sendThankYouStrategieEmail({
       to: email,
       variables: {
-        vorname: booking?.firstName || firstName || "dort",
+        vorname,
       },
     });
 
-    console.log(`Thank You Strategie email sent to ${email}`);
+    console.log(`Thank You Strategie email sent via Resend to ${email}`);
     return true;
   } catch (emailError) {
     console.error("Failed to send Thank You Strategie email:", emailError);
