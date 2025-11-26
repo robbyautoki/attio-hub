@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { bookings, type Booking } from "@/lib/db/schema";
-import { eq, and, lte, gte, isNull } from "drizzle-orm";
+import { eq, and, lte, gte, isNull, desc } from "drizzle-orm";
 
 export interface CreateBookingData {
   email: string;
@@ -186,4 +186,31 @@ export async function getBookingsByUser(userId: string, limit = 50): Promise<Boo
     .from(bookings)
     .where(eq(bookings.userId, userId))
     .limit(limit);
+}
+
+/**
+ * Gets the most recent booking by email
+ */
+export async function getBookingByEmail(email: string): Promise<Booking | null> {
+  const [booking] = await db
+    .select()
+    .from(bookings)
+    .where(eq(bookings.email, email))
+    .orderBy(desc(bookings.createdAt))
+    .limit(1);
+
+  return booking || null;
+}
+
+/**
+ * Marks a booking as no-show
+ */
+export async function markBookingAsNoShow(bookingId: string): Promise<void> {
+  await db
+    .update(bookings)
+    .set({
+      status: "no_show",
+      updatedAt: new Date(),
+    })
+    .where(eq(bookings.id, bookingId));
 }
