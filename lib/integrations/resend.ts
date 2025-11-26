@@ -494,6 +494,126 @@ export class ResendClient {
   }
 
   /**
+   * Send a Thank You email after Discovery Call completed
+   * Variables: vorname
+   */
+  async sendThankYouDiscoveryEmail(data: {
+    to: string;
+    variables: {
+      vorname: string;
+    };
+  }): Promise<unknown> {
+    const { vorname } = data.variables;
+
+    const html = this.buildThankYouDiscoveryHtml({ vorname });
+
+    return this.request("/emails", {
+      method: "POST",
+      body: JSON.stringify({
+        from: "Robby <robby@notifications.auto.ki>",
+        to: data.to,
+        subject: "Danke für das tolle Gespräch!",
+        html,
+      }),
+    });
+  }
+
+  /**
+   * Build HTML for Thank You Discovery Call email
+   */
+  private buildThankYouDiscoveryHtml(vars: { vorname: string }): string {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="font-size: 28px; margin-bottom: 24px;">Danke für das tolle Gespräch! 🙏</h1>
+
+  <p>Hey ${vars.vorname},</p>
+
+  <p>vielen Dank, dass du dir die Zeit für unser Discovery Call genommen hast! Es war super, dich kennenzulernen und mehr über deine Ziele zu erfahren.</p>
+
+  <p>Ich hoffe, du konntest einen guten ersten Eindruck gewinnen, wie wir dich unterstützen können. Falls du noch Fragen hast oder direkt loslegen möchtest, melde dich gerne bei mir.</p>
+
+  <p>In der Zwischenzeit kannst du dich gerne in unserer Academy umsehen – dort findest du viele hilfreiche Ressourcen:</p>
+
+  <a href="https://academy.auto.ki" style="display: inline-block; background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 16px 0;">Zur Academy</a>
+
+  <p>Ich freue mich auf die weitere Zusammenarbeit!</p>
+
+  <p>Liebe Grüße</p>
+
+  <p style="margin-top: 24px;"><strong>Robby von auto.ki</strong></p>
+</body>
+</html>
+    `.trim();
+  }
+
+  /**
+   * Send a Thank You email after Strategie Call completed
+   * Variables: vorname
+   */
+  async sendThankYouStrategieEmail(data: {
+    to: string;
+    variables: {
+      vorname: string;
+    };
+  }): Promise<unknown> {
+    const { vorname } = data.variables;
+
+    const html = this.buildThankYouStrategieHtml({ vorname });
+
+    return this.request("/emails", {
+      method: "POST",
+      body: JSON.stringify({
+        from: "Robby <robby@notifications.auto.ki>",
+        to: data.to,
+        subject: "Danke für das Strategiegespräch!",
+        html,
+      }),
+    });
+  }
+
+  /**
+   * Build HTML for Thank You Strategie Call email
+   */
+  private buildThankYouStrategieHtml(vars: { vorname: string }): string {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="font-size: 28px; margin-bottom: 24px;">Danke für das Strategiegespräch! 🚀</h1>
+
+  <p>Hey ${vars.vorname},</p>
+
+  <p>vielen Dank für das intensive Strategiegespräch! Es war großartig, gemeinsam an deiner Strategie zu arbeiten und konkrete nächste Schritte zu definieren.</p>
+
+  <p>Ich bin überzeugt, dass wir zusammen Großes erreichen können. Die besprochenen Punkte und Empfehlungen werden dir helfen, deine Ziele schneller zu erreichen.</p>
+
+  <p>Falls du noch Fragen hast oder wir etwas besprechen sollten, bin ich jederzeit für dich da.</p>
+
+  <p>Schau auch gerne in unsere Academy – dort findest du weiterführende Ressourcen zu den besprochenen Themen:</p>
+
+  <a href="https://academy.auto.ki" style="display: inline-block; background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 16px 0;">Zur Academy</a>
+
+  <p>Auf eine erfolgreiche Zusammenarbeit!</p>
+
+  <p>Liebe Grüße</p>
+
+  <p style="margin-top: 24px;"><strong>Robby von auto.ki</strong></p>
+</body>
+</html>
+    `.trim();
+  }
+
+  /**
    * Build HTML for booking confirmation
    * This matches the Resend template "terminbesttigung"
    */

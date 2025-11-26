@@ -7,11 +7,12 @@ import { getWorkflowByWebhookPath, incrementExecutionStats } from "@/lib/service
 import { createExecutionLog, updateExecutionLog } from "@/lib/services/execution.service";
 
 // Attio Webhook Handler for booking status changes
-// Handles: "No-Show" and "Meeting läuft - Person fehlt"
+// Handles: "No-Show", "Meeting läuft - Person fehlt", and "Termin abgeschlossen"
 
 // Status values from Attio
 const STATUS_NO_SHOW = "No-Show";
 const STATUS_MEETING_RUNNING = "Meeting läuft - Person fehlt";
+const STATUS_COMPLETED = "Termin abgeschlossen";
 
 interface StepLog {
   name: string;
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
     let firstName: string | undefined;
     let lastName: string | undefined;
     let bookingStatus: string | undefined;
+    let meetingType: string | undefined;
 
     // Format 1: Nested event structure (standard Attio webhook)
     if (payload.event) {
@@ -60,6 +62,10 @@ export async function POST(request: Request) {
       // Try to get booking_status from the record or from new_value
       bookingStatus = record?.values?.booking_status?.[0]?.option?.title ||
                       payload.event?.new_value?.[0]?.option?.title;
+      // Get meeting_type from record
+      meetingType = record?.values?.meeting_type?.[0]?.option?.title ||
+                    record?.values?.meeting_type?.[0]?.value ||
+                    record?.values?.meeting_type;
     }
 
     // Format 2: Flat structure (direct fields)
@@ -72,12 +78,16 @@ export async function POST(request: Request) {
     if (!bookingStatus && payload.booking_status) {
       bookingStatus = payload.booking_status;
     }
+    if (!meetingType && payload.meeting_type) {
+      meetingType = payload.meeting_type;
+    }
 
     // Format 3: Data wrapper
     if (!email && payload.data?.email) {
       email = payload.data.email;
       firstName = payload.data.first_name || payload.data.firstName;
       bookingStatus = payload.data.booking_status;
+      meetingType = payload.data.meeting_type;
     }
 
     // Format 4: new_value at root level
@@ -93,13 +103,13 @@ export async function POST(request: Request) {
       name: "Parse Attio Payload",
       status: "success",
       input: payload,
-      output: { email, firstName, lastName, bookingStatus, fullName },
+      output: { email, firstName, lastName, bookingStatus, meetingType, fullName },
       durationMs: Date.now() - stepStartParse,
       timestamp: new Date().toISOString(),
     });
 
     // Log what we extracted
-    console.log("Extracted data:", { email, firstName, lastName, bookingStatus });
+    console.log("Extracted data:", { email, firstName, lastName, bookingStatus, meetingType });
 
     // If we don't have email, we can't process further
     if (!email) {
@@ -272,6 +282,64 @@ export async function POST(request: Request) {
         });
       }
 
+    } else if (bookingStatus === STATUS_COMPLETED) {
+      action = "completed";
+
+      // Step 3a: Send Slack notification
+      const stepStartSlack = Date.now();
+      try {
+        await sendSlackNotification({
+          text: `✅ Termin mit ${fullName} abgeschlossen (${email}) - ${meetingType || "Unbekannt"}`,
+        });
+        stepLogs.push({
+          name: "Send Slack Notification",
+          status: "success",
+          output: { message: `Completed: ${fullName}`, meetingType },
+          durationMs: Date.now() - stepStartSlack,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        stepLogs.push({
+          name: "Send Slack Notification",
+          status: "failed",
+          error: error instanceof Error ? error.message : "Unknown error",
+          durationMs: Date.now() - stepStartSlack,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Step 3b: Send Thank You email based on meeting_type
+      const stepStartEmail = Date.now();
+      if (meetingType === "Discovery Call") {
+        emailSent = await sendThankYouDiscoveryEmail(booking, email, firstName);
+        stepLogs.push({
+          name: "Send Thank You Discovery Email",
+          status: emailSent ? "success" : "failed",
+          input: { to: email, firstName, meetingType },
+          error: emailSent ? undefined : "Failed to send email",
+          durationMs: Date.now() - stepStartEmail,
+          timestamp: new Date().toISOString(),
+        });
+      } else if (meetingType === "Strategie Call") {
+        emailSent = await sendThankYouStrategieEmail(booking, email, firstName);
+        stepLogs.push({
+          name: "Send Thank You Strategie Email",
+          status: emailSent ? "success" : "failed",
+          input: { to: email, firstName, meetingType },
+          error: emailSent ? undefined : "Failed to send email",
+          durationMs: Date.now() - stepStartEmail,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        stepLogs.push({
+          name: "Send Thank You Email",
+          status: "skipped",
+          error: `Unknown meeting_type: ${meetingType || "not provided"}`,
+          durationMs: Date.now() - stepStartEmail,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
     } else {
       // Unknown or unhandled status - just log it
       console.log(`Unhandled booking status: ${bookingStatus}`);
@@ -438,6 +506,86 @@ async function sendMeetingRunningEmail(
     console.error("Failed to send Meeting Running email:", emailError);
     await sendSlackNotification({
       text: `⚠️ Meeting-Reminder Email konnte nicht gesendet werden: ${emailError instanceof Error ? emailError.message : "Unknown error"}`,
+    });
+    return false;
+  }
+}
+
+// Helper function to send Thank You Discovery email
+async function sendThankYouDiscoveryEmail(
+  booking: { userId: string; firstName: string | null } | null,
+  email: string,
+  firstName: string | undefined
+): Promise<boolean> {
+  try {
+    // Get user ID from booking or use a default admin user
+    const userId = booking?.userId;
+    if (!userId) {
+      console.log("No booking found - cannot determine user for API key");
+      return false;
+    }
+
+    const resendKey = await getDecryptedApiKeyByService(userId, "resend");
+    if (!resendKey) {
+      console.log("No Resend API key found for user");
+      return false;
+    }
+
+    const resendClient = createResendClient(resendKey);
+
+    await resendClient.sendThankYouDiscoveryEmail({
+      to: email,
+      variables: {
+        vorname: booking?.firstName || firstName || "dort",
+      },
+    });
+
+    console.log(`Thank You Discovery email sent to ${email}`);
+    return true;
+  } catch (emailError) {
+    console.error("Failed to send Thank You Discovery email:", emailError);
+    await sendSlackNotification({
+      text: `⚠️ Thank You Discovery Email konnte nicht gesendet werden: ${emailError instanceof Error ? emailError.message : "Unknown error"}`,
+    });
+    return false;
+  }
+}
+
+// Helper function to send Thank You Strategie email
+async function sendThankYouStrategieEmail(
+  booking: { userId: string; firstName: string | null } | null,
+  email: string,
+  firstName: string | undefined
+): Promise<boolean> {
+  try {
+    // Get user ID from booking or use a default admin user
+    const userId = booking?.userId;
+    if (!userId) {
+      console.log("No booking found - cannot determine user for API key");
+      return false;
+    }
+
+    const resendKey = await getDecryptedApiKeyByService(userId, "resend");
+    if (!resendKey) {
+      console.log("No Resend API key found for user");
+      return false;
+    }
+
+    const resendClient = createResendClient(resendKey);
+
+    await resendClient.sendThankYouStrategieEmail({
+      to: email,
+      variables: {
+        vorname: booking?.firstName || firstName || "dort",
+      },
+    });
+
+    console.log(`Thank You Strategie email sent to ${email}`);
+    return true;
+  } catch (emailError) {
+    console.error("Failed to send Thank You Strategie email:", emailError);
+    await sendSlackNotification({
+      text: `⚠️ Thank You Strategie Email konnte nicht gesendet werden: ${emailError instanceof Error ? emailError.message : "Unknown error"}`,
     });
     return false;
   }
