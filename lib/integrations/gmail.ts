@@ -332,6 +332,47 @@ export async function sendBookingConfirmationEmail(data: {
 }
 
 /**
+ * Send Cancelled/Rebook email when booking is cancelled
+ */
+export async function sendCancelledRebookEmail(data: {
+  to: string;
+  vorname: string;
+}): Promise<{ id: string; threadId: string }> {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="font-size: 28px; margin-bottom: 24px;">Schade, dass wir uns nicht treffen konnten!</h1>
+
+  <p>Hey ${data.vorname},</p>
+
+  <p>ich habe gesehen, dass unser Termin leider nicht stattfinden konnte. Das ist natürlich schade, aber kein Problem – manchmal kommt etwas dazwischen.</p>
+
+  <p>Ich würde mich freuen, wenn wir einen neuen Termin finden. Klick einfach auf den Button unten und such dir einen passenden Zeitpunkt aus:</p>
+
+  <a href="https://cal.com/auto-ki/discovery" style="display: inline-block; background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 16px 0;">Neuen Termin buchen</a>
+
+  <p>Falls du Fragen hast oder lieber per Email kommunizieren möchtest, antworte einfach auf diese Nachricht.</p>
+
+  <p>Bis bald!</p>
+
+  <p style="margin-top: 24px;"><strong>Matthias von auto.ki</strong></p>
+</body>
+</html>
+  `.trim();
+
+  return sendGmailEmail({
+    to: data.to,
+    subject: "Lass uns einen neuen Termin finden!",
+    html,
+  });
+}
+
+/**
  * Send 1h Reminder email
  */
 export async function send1hReminderEmail(data: {

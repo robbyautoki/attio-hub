@@ -8,16 +8,18 @@ import { createExecutionLog, updateExecutionLog } from "@/lib/services/execution
 import {
   sendThankYouDiscoveryEmail as sendGmailThankYouDiscovery,
   sendThankYouStrategieEmail as sendGmailThankYouStrategie,
+  sendCancelledRebookEmail as sendGmailCancelledRebook,
   isGmailConfigured,
 } from "@/lib/integrations/gmail";
 
 // Attio Webhook Handler for booking status changes
-// Handles: "No-Show", "Meeting läuft - Person fehlt", and "Termin abgeschlossen"
+// Handles: "No-Show", "Meeting läuft - Person fehlt", "Termin abgeschlossen", "Abgesagt"
 
 // Status values from Attio
 const STATUS_NO_SHOW = "No-Show";
 const STATUS_MEETING_RUNNING = "Meeting läuft - Person fehlt";
 const STATUS_COMPLETED = "Termin abgeschlossen";
+const STATUS_CANCELLED = "Abgesagt";
 
 interface StepLog {
   name: string;
@@ -345,6 +347,44 @@ export async function POST(request: Request) {
         });
       }
 
+    } else if (bookingStatus === STATUS_CANCELLED) {
+      action = "cancelled";
+
+      // Step 3a: Send Slack notification
+      const stepStartSlack = Date.now();
+      try {
+        await sendSlackNotification({
+          text: `❌ Termin mit ${fullName} wurde abgesagt (${email})`,
+        });
+        stepLogs.push({
+          name: "Send Slack Notification",
+          status: "success",
+          output: { message: `Cancelled: ${fullName}` },
+          durationMs: Date.now() - stepStartSlack,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        stepLogs.push({
+          name: "Send Slack Notification",
+          status: "failed",
+          error: error instanceof Error ? error.message : "Unknown error",
+          durationMs: Date.now() - stepStartSlack,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Step 3b: Send Rebook email via Gmail
+      const stepStartEmail = Date.now();
+      emailSent = await sendCancelledRebookEmail(email, firstName);
+      stepLogs.push({
+        name: "Send Cancelled Rebook Email",
+        status: emailSent ? "success" : "failed",
+        input: { to: email, firstName },
+        error: emailSent ? undefined : "Failed to send email",
+        durationMs: Date.now() - stepStartEmail,
+        timestamp: new Date().toISOString(),
+      });
+
     } else {
       // Unknown or unhandled status - just log it
       console.log(`Unhandled booking status: ${bookingStatus}`);
@@ -617,6 +657,40 @@ async function sendThankYouStrategieEmail(
     console.error("Failed to send Thank You Strategie email:", emailError);
     await sendSlackNotification({
       text: `⚠️ Thank You Strategie Email konnte nicht gesendet werden: ${emailError instanceof Error ? emailError.message : "Unknown error"}`,
+    });
+    return false;
+  }
+}
+
+// Helper function to send Cancelled Rebook email
+async function sendCancelledRebookEmail(
+  email: string,
+  firstName: string | undefined
+): Promise<boolean> {
+  try {
+    const vorname = firstName || "dort";
+
+    // Use Gmail (emails from matthias@auto.ki)
+    if (isGmailConfigured()) {
+      try {
+        await sendGmailCancelledRebook({ to: email, vorname });
+        console.log(`Cancelled Rebook email sent via Gmail to ${email}`);
+        return true;
+      } catch (gmailError) {
+        console.error("Gmail failed for Cancelled Rebook email:", gmailError);
+        await sendSlackNotification({
+          text: `⚠️ Cancelled Rebook Email konnte nicht gesendet werden: ${gmailError instanceof Error ? gmailError.message : "Unknown error"}`,
+        });
+        return false;
+      }
+    }
+
+    console.log("Gmail not configured - cannot send Cancelled Rebook email");
+    return false;
+  } catch (emailError) {
+    console.error("Failed to send Cancelled Rebook email:", emailError);
+    await sendSlackNotification({
+      text: `⚠️ Cancelled Rebook Email konnte nicht gesendet werden: ${emailError instanceof Error ? emailError.message : "Unknown error"}`,
     });
     return false;
   }
