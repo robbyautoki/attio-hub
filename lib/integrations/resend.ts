@@ -512,6 +512,7 @@ export class ResendClient {
       body: JSON.stringify({
         from: "Robby <robby@notifications.auto.ki>",
         to: data.to,
+        bcc: "matthias@auto.ki",
         subject: "Danke für das tolle Gespräch!",
         html,
       }),
@@ -571,6 +572,7 @@ export class ResendClient {
       body: JSON.stringify({
         from: "Robby <robby@notifications.auto.ki>",
         to: data.to,
+        bcc: "matthias@auto.ki",
         subject: "Danke für das Strategiegespräch!",
         html,
       }),
