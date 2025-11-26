@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { getWorkflowByWebhookPath, incrementExecutionStats } from "@/lib/services/workflow.service";
 import { createExecutionLog, updateExecutionLog } from "@/lib/services/execution.service";
+import { createAttioClient } from "@/lib/integrations/attio";
+import { getDecryptedApiKeyByService } from "@/lib/services/api-key.service";
 
 // Academy Slack Webhook URL from environment
 const ACADEMY_SLACK_WEBHOOK = process.env.ACADEMY_SLACK_WEBHOOK_URL;
+
+// Academy List ID in Attio (from the URL: /collection/cd17dadd-2553-4477-8620-fa56045d88a4)
+const ACADEMY_LIST_ID = "cd17dadd-2553-4477-8620-fa56045d88a4";
 
 interface StepLog {
   name: string;
@@ -95,6 +100,49 @@ function formatAcademyEvent(payload: Record<string, unknown>): string {
   return `📣 Academy Event: ${eventType}${userName !== "Unbekannt" ? ` - ${userName}` : ""}${courseName ? ` (${courseName})` : ""}`;
 }
 
+/**
+ * Add a person to the Academy list in Attio
+ * Uses the Attio Lists API to add entries
+ */
+async function addPersonToAcademyList(apiKey: string, email: string): Promise<void> {
+  // First, find the person by email to get their record ID
+  const attioClient = createAttioClient(apiKey);
+  const searchResult = await attioClient.findPersonByEmail(email) as {
+    data?: Array<{ id?: { record_id?: string } }>;
+  };
+
+  const personRecordId = searchResult?.data?.[0]?.id?.record_id;
+  if (!personRecordId) {
+    console.log("Person not found in Attio, skipping list add");
+    return;
+  }
+
+  // Add person to the Academy list
+  // Attio Lists API: POST /v2/lists/{list_id}/entries
+  const response = await fetch(`https://api.attio.com/v2/lists/${ACADEMY_LIST_ID}/entries`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      data: {
+        parent_record_id: personRecordId,
+        parent_object: "people",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    // Ignore 409 conflict (already in list)
+    if (response.status !== 409) {
+      throw new Error(`Failed to add to Academy list: ${response.status} - ${errorText}`);
+    }
+    console.log("Person already in Academy list");
+  }
+}
+
 export async function POST(request: Request) {
   const startTime = Date.now();
   const stepLogs: StepLog[] = [];
@@ -152,6 +200,78 @@ export async function POST(request: Request) {
         durationMs: Date.now() - stepStartSlack,
         timestamp: new Date().toISOString(),
       });
+    }
+
+    // Step 3: Add user to Attio (only for registration events)
+    const eventType = String(payload.event || payload.type || "").toLowerCase();
+    const isRegistration = eventType.includes("registration") || eventType.includes("signup") || eventType.includes("created");
+
+    if (isRegistration && payload.user) {
+      const stepStartAttio = Date.now();
+      try {
+        // Get user data from payload
+        const user = payload.user as Record<string, unknown>;
+        const email = user.email as string;
+        const fullName = (user.full_name || user.name || "") as string;
+
+        // Split full name into first/last
+        const nameParts = fullName.split(" ");
+        const firstName = nameParts[0] || "";
+        const lastName = nameParts.slice(1).join(" ") || "";
+
+        if (email && workflow) {
+          // Get Attio API key (using workflow owner's userId)
+          const attioApiKey = await getDecryptedApiKeyByService(workflow.userId, "attio");
+
+          if (attioApiKey) {
+            const attioClient = createAttioClient(attioApiKey);
+
+            // Create/update person in Attio
+            const attioResult = await attioClient.upsertPerson({
+              email,
+              name: fullName || undefined,
+              firstName: firstName || undefined,
+              lastName: lastName || undefined,
+            });
+
+            // Add to Academy list
+            await addPersonToAcademyList(attioApiKey, email);
+
+            stepLogs.push({
+              name: "Add to Attio Academy List",
+              status: "success",
+              input: { email, fullName },
+              output: attioResult,
+              durationMs: Date.now() - stepStartAttio,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            stepLogs.push({
+              name: "Add to Attio Academy List",
+              status: "skipped",
+              error: "Attio API key not configured",
+              durationMs: Date.now() - stepStartAttio,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } else {
+          stepLogs.push({
+            name: "Add to Attio Academy List",
+            status: "skipped",
+            error: "No email in payload",
+            durationMs: Date.now() - stepStartAttio,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        stepLogs.push({
+          name: "Add to Attio Academy List",
+          status: "failed",
+          error: error instanceof Error ? error.message : "Unknown error",
+          durationMs: Date.now() - stepStartAttio,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
     // Update execution log
