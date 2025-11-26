@@ -48,7 +48,6 @@ async function seedAcademyWorkflow() {
     triggerType: "webhook",
     triggerConfig: {
       provider: "academy",
-      fixedWebhookPath: "academy",
       events: ["signup", "enroll", "complete", "progress", "cancel"]
     },
     webhookPath: "academy",
