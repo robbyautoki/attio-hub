@@ -7,52 +7,19 @@ import { sendSlackNotification } from "@/lib/integrations/slack";
 // Attio Webhook Handler for No-Show tracking
 // Triggered when booking_status attribute is changed to "No-Show" in Attio
 
-const ATTIO_ATTRIBUTE_SLUG = "booking_status";
-const NO_SHOW_STATUS = "No-Show";
-
 export async function POST(request: Request) {
-  const startTime = Date.now();
-
   try {
     const payload = await request.json();
 
     console.log("Attio webhook received:", JSON.stringify(payload, null, 2));
 
-    // Send initial Slack notification that webhook was received (for debugging)
-    await sendSlackNotification({
-      text: "Attio Webhook empfangen",
-      blocks: [
-        {
-          type: "header",
-          text: {
-            type: "plain_text",
-            text: "📥 Attio Webhook empfangen",
-            emoji: true,
-          },
-        },
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `\`\`\`${JSON.stringify(payload, null, 2).substring(0, 2500)}\`\`\``,
-          },
-        },
-      ],
-    });
-
     // Try multiple payload structures (Attio can send different formats)
     let email: string | undefined;
     let firstName: string | undefined;
     let lastName: string | undefined;
-    let newStatus: string | undefined;
-    let attributeSlug: string | undefined;
 
     // Format 1: Nested event structure (standard Attio webhook)
     if (payload.event) {
-      attributeSlug = payload.event.attribute?.slug;
-      const newValue = payload.event.new_value;
-      newStatus = newValue?.[0]?.option?.title || newValue?.[0]?.status?.title;
-
       const record = payload.event.record;
       email = record?.values?.email_addresses?.[0]?.email_address;
       firstName = record?.values?.name?.[0]?.first_name;
@@ -73,33 +40,17 @@ export async function POST(request: Request) {
       firstName = payload.data.first_name || payload.data.firstName;
     }
 
-    const fullName = `${firstName || "Unbekannt"} ${lastName || ""}`.trim();
+    const fullName = firstName
+      ? `${firstName}${lastName ? ` ${lastName}` : ""}`
+      : "Unbekannt";
 
     // Log what we extracted
-    console.log("Extracted data:", { email, firstName, lastName, newStatus, attributeSlug });
+    console.log("Extracted data:", { email, firstName, lastName });
 
     // If we don't have email, we can't process further
     if (!email) {
-      const durationMs = Date.now() - startTime;
       await sendSlackNotification({
-        text: "Attio Webhook: Keine Email gefunden",
-        blocks: [
-          {
-            type: "header",
-            text: {
-              type: "plain_text",
-              text: "⚠️ Attio Webhook: Keine Email",
-              emoji: true,
-            },
-          },
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `Konnte keine Email-Adresse aus der Payload extrahieren.\nDauer: ${durationMs}ms`,
-            },
-          },
-        ],
+        text: `⚠️ Attio Webhook: Keine Email gefunden`,
       });
       return NextResponse.json({ error: "No email in payload" }, { status: 400 });
     }
@@ -113,67 +64,9 @@ export async function POST(request: Request) {
       console.log(`Marked booking ${booking.id} as no_show`);
     }
 
-    const durationMs = Date.now() - startTime;
-
-    // 2. Send success Slack notification
+    // 2. Send compact Slack notification
     await sendSlackNotification({
-      text: `Attio Webhook verarbeitet: ${fullName} (${email})`,
-      blocks: [
-        {
-          type: "header",
-          text: {
-            type: "plain_text",
-            text: "✅ Attio Webhook erfolgreich",
-            emoji: true,
-          },
-        },
-        {
-          type: "section",
-          fields: [
-            {
-              type: "mrkdwn",
-              text: `*Name:*\n${fullName}`,
-            },
-            {
-              type: "mrkdwn",
-              text: `*Email:*\n${email}`,
-            },
-            {
-              type: "mrkdwn",
-              text: `*Status:*\n${newStatus || "N/A"}`,
-            },
-            {
-              type: "mrkdwn",
-              text: `*Attribut:*\n${attributeSlug || "N/A"}`,
-            },
-          ],
-        },
-        {
-          type: "section",
-          fields: [
-            {
-              type: "mrkdwn",
-              text: `*Booking gefunden:*\n${booking ? "Ja" : "Nein"}`,
-            },
-            {
-              type: "mrkdwn",
-              text: `*Dauer:*\n${durationMs}ms`,
-            },
-          ],
-        },
-        {
-          type: "context",
-          elements: [
-            {
-              type: "mrkdwn",
-              text: "Quelle: Attio Webhook | Attio No-Show Handler",
-            },
-          ],
-        },
-        {
-          type: "divider",
-        },
-      ],
+      text: `🚫 ${fullName} wurde als No-Show markiert (${email})`,
     });
 
     // 3. Send No-Show email (TODO: Add when template is provided)
@@ -192,35 +85,14 @@ export async function POST(request: Request) {
         email,
         name: fullName,
         bookingUpdated: !!booking,
-        durationMs,
       },
     });
   } catch (error) {
     console.error("Attio webhook error:", error);
 
-    // Send error to Slack
+    // Send compact error to Slack
     await sendSlackNotification({
-      text: "Attio Webhook Fehler",
-      blocks: [
-        {
-          type: "header",
-          text: {
-            type: "plain_text",
-            text: "❌ Attio Webhook Fehler",
-            emoji: true,
-          },
-        },
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `\`\`\`${error instanceof Error ? error.message : "Unknown error"}\`\`\``,
-          },
-        },
-        {
-          type: "divider",
-        },
-      ],
+      text: `❌ Attio Webhook Fehler: ${error instanceof Error ? error.message : "Unknown error"}`,
     });
 
     return NextResponse.json(
