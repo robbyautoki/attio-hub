@@ -179,7 +179,8 @@ export async function executeCalcomWorkflow(
       });
     }
 
-    // Execute Klaviyo step
+    // Execute Klaviyo step - upsert profile and add to booking list
+    const KLAVIYO_BOOKING_LIST_ID = "W7cQgS";
     if (klaviyoKey && bookingData.email) {
       const stepStartKlaviyo = Date.now();
       try {
@@ -198,6 +199,34 @@ export async function executeCalcomWorkflow(
           durationMs: Date.now() - stepStartKlaviyo,
           timestamp: new Date().toISOString(),
         });
+
+        // Add to booking list
+        const stepStartList = Date.now();
+        try {
+          const listResult = await klaviyoClient.subscribeToList(
+            KLAVIYO_BOOKING_LIST_ID,
+            bookingData.email,
+            bookingData.firstName || undefined,
+            bookingData.lastName || undefined
+          );
+          stepLogs.push({
+            name: "Add to Klaviyo Booking List",
+            status: "success",
+            input: { listId: KLAVIYO_BOOKING_LIST_ID, email: bookingData.email },
+            output: listResult,
+            durationMs: Date.now() - stepStartList,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (listError) {
+          stepLogs.push({
+            name: "Add to Klaviyo Booking List",
+            status: "failed",
+            input: { listId: KLAVIYO_BOOKING_LIST_ID, email: bookingData.email },
+            error: listError instanceof Error ? listError.message : "Unknown error",
+            durationMs: Date.now() - stepStartList,
+            timestamp: new Date().toISOString(),
+          });
+        }
       } catch (error) {
         stepLogs.push({
           name: "Create/Update Klaviyo Profile",
