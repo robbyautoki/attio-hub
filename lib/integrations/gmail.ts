@@ -74,22 +74,16 @@ function createMimeMessage(options: {
   html: string;
   bcc?: string;
 }): string {
-  const boundary = `boundary_${Date.now()}`;
-
+  // Simple single-part HTML email (more compatible)
   const mimeMessage = [
     `From: Matthias <${SENDER_EMAIL}>`,
     `To: ${options.to}`,
     options.bcc ? `Bcc: ${options.bcc}` : null,
     `Subject: =?UTF-8?B?${Buffer.from(options.subject).toString("base64")}?=`,
     "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
     "Content-Type: text/html; charset=UTF-8",
-    "Content-Transfer-Encoding: base64",
     "",
-    Buffer.from(options.html).toString("base64"),
-    `--${boundary}--`,
+    options.html,
   ]
     .filter(Boolean)
     .join("\r\n");
