@@ -129,6 +129,7 @@ async function addPersonToAcademyList(apiKey: string, email: string): Promise<vo
       data: {
         parent_record_id: personRecordId,
         parent_object: "people",
+        entry_values: {},
       },
     }),
   });
