@@ -345,6 +345,79 @@ export class ResendClient {
   }
 
   /**
+   * Send a No-Show email when someone misses their appointment
+   * Variables: vorname, terminart, datum, uhrzeit
+   */
+  async sendNoShowEmail(data: {
+    to: string;
+    variables: {
+      vorname: string;
+      terminart: string;
+      datum: string;
+      uhrzeit: string;
+    };
+  }): Promise<unknown> {
+    const { vorname, terminart, datum, uhrzeit } = data.variables;
+
+    const html = this.buildNoShowHtml({
+      vorname,
+      terminart,
+      datum,
+      uhrzeit,
+    });
+
+    return this.request("/emails", {
+      method: "POST",
+      body: JSON.stringify({
+        from: "Robby <robby@notifications.auto.ki>",
+        to: data.to,
+        subject: "Schade, dass wir dich verpasst haben",
+        html,
+      }),
+    });
+  }
+
+  /**
+   * Build HTML for No-Show email
+   */
+  private buildNoShowHtml(vars: {
+    vorname: string;
+    terminart: string;
+    datum: string;
+    uhrzeit: string;
+  }): string {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="font-size: 28px; margin-bottom: 24px;">Schade, dass wir dich verpasst haben 😔</h1>
+
+  <p>Hey ${vars.vorname},</p>
+
+  <p>wir hatten uns auf unser Gespräch gefreut, aber leider konnten wir dich nicht erreichen:</p>
+
+  <p><strong>Was:</strong> ${vars.terminart}</p>
+  <p><strong>Wann:</strong> ${vars.datum} um ${vars.uhrzeit} Uhr</p>
+
+  <p>Kein Problem – das Leben ist manchmal unberechenbar! Falls du immer noch Interesse hast, kannst du ganz einfach einen neuen Termin buchen:</p>
+
+  <a href="https://cal.com/auto-ki/discovery" style="display: inline-block; background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 16px 0;">Neuen Termin buchen</a>
+
+  <p>Falls du Fragen hast oder etwas dazwischengekommen ist, melde dich gerne bei uns.</p>
+
+  <p>Liebe Grüße</p>
+
+  <p style="margin-top: 24px;"><strong>auto.ki</strong></p>
+</body>
+</html>
+    `.trim();
+  }
+
+  /**
    * Build HTML for booking confirmation
    * This matches the Resend template "terminbesttigung"
    */

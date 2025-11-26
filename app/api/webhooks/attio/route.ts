@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { markBookingAsNoShow, getBookingByEmail } from "@/lib/services/booking.service";
 import { sendSlackNotification } from "@/lib/integrations/slack";
-// import { createResendClient } from "@/lib/integrations/resend";
-// import { getDecryptedApiKeyByService } from "@/lib/services/api-key.service";
+import { createResendClient } from "@/lib/integrations/resend";
+import { getDecryptedApiKeyByService } from "@/lib/services/api-key.service";
 
 // Attio Webhook Handler for No-Show tracking
 // Triggered when booking_status attribute is changed to "No-Show" in Attio
@@ -69,15 +69,49 @@ export async function POST(request: Request) {
       text: `🚫 ${fullName} wurde als No-Show markiert (${email})`,
     });
 
-    // 3. Send No-Show email (TODO: Add when template is provided)
-    // const resendKey = await getDecryptedApiKeyByService(booking?.userId || "", "resend");
-    // if (resendKey) {
-    //   const resendClient = createResendClient(resendKey);
-    //   await resendClient.sendNoShowEmail({
-    //     to: email,
-    //     variables: { vorname: firstName || "dort" },
-    //   });
-    // }
+    // 3. Send No-Show email if booking exists (uses booking data for template variables)
+    let emailSent = false;
+    if (booking) {
+      try {
+        const resendKey = await getDecryptedApiKeyByService(booking.userId, "resend");
+        if (resendKey) {
+          const resendClient = createResendClient(resendKey);
+
+          // Format date and time from booking
+          const startDate = new Date(booking.startTime);
+          const datum = startDate.toLocaleDateString("de-DE", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          });
+          const uhrzeit = startDate.toLocaleTimeString("de-DE", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+
+          await resendClient.sendNoShowEmail({
+            to: email,
+            variables: {
+              vorname: booking.firstName || firstName || "dort",
+              terminart: booking.eventType || "Discovery Call",
+              datum,
+              uhrzeit,
+            },
+          });
+
+          emailSent = true;
+          console.log(`No-Show email sent to ${email}`);
+        } else {
+          console.log("No Resend API key found for user");
+        }
+      } catch (emailError) {
+        console.error("Failed to send No-Show email:", emailError);
+        await sendSlackNotification({
+          text: `⚠️ No-Show Email konnte nicht gesendet werden: ${emailError instanceof Error ? emailError.message : "Unknown error"}`,
+        });
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -85,6 +119,7 @@ export async function POST(request: Request) {
         email,
         name: fullName,
         bookingUpdated: !!booking,
+        emailSent,
       },
     });
   } catch (error) {
