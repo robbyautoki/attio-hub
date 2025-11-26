@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { markBookingAsNoShow, getBookingByEmail } from "@/lib/services/booking.service";
-import { sendSlackNotification } from "@/lib/integrations/slack";
+import { sendSlackNotification, formatExecutionLogForSlack } from "@/lib/integrations/slack";
 import { createResendClient } from "@/lib/integrations/resend";
 import { getDecryptedApiKeyByService } from "@/lib/services/api-key.service";
+import { getWorkflowByWebhookPath, incrementExecutionStats } from "@/lib/services/workflow.service";
+import { createExecutionLog, updateExecutionLog } from "@/lib/services/execution.service";
 
 // Attio Webhook Handler for booking status changes
 // Handles: "No-Show" and "Meeting läuft - Person fehlt"
@@ -11,13 +13,39 @@ import { getDecryptedApiKeyByService } from "@/lib/services/api-key.service";
 const STATUS_NO_SHOW = "No-Show";
 const STATUS_MEETING_RUNNING = "Meeting läuft - Person fehlt";
 
+interface StepLog {
+  name: string;
+  status: "success" | "failed" | "skipped";
+  input?: unknown;
+  output?: unknown;
+  error?: string;
+  durationMs: number;
+  timestamp: string;
+}
+
 export async function POST(request: Request) {
+  const startTime = Date.now();
+  const stepLogs: StepLog[] = [];
+  let logId: string | null = null;
+  let workflow: Awaited<ReturnType<typeof getWorkflowByWebhookPath>> = null;
+
   try {
     const payload = await request.json();
 
     console.log("Attio webhook received:", JSON.stringify(payload, null, 2));
 
-    // Try multiple payload structures (Attio can send different formats)
+    // Get the workflow for this webhook
+    workflow = await getWorkflowByWebhookPath("attio");
+
+    // Create execution log if workflow exists
+    if (workflow) {
+      const log = await createExecutionLog(workflow.id, "webhook", payload);
+      logId = log.id;
+      await updateExecutionLog(logId, { status: "running" });
+    }
+
+    // Step 1: Parse Attio Payload
+    const stepStartParse = Date.now();
     let email: string | undefined;
     let firstName: string | undefined;
     let lastName: string | undefined;
@@ -61,21 +89,63 @@ export async function POST(request: Request) {
       ? `${firstName}${lastName ? ` ${lastName}` : ""}`
       : "Unbekannt";
 
+    stepLogs.push({
+      name: "Parse Attio Payload",
+      status: "success",
+      input: payload,
+      output: { email, firstName, lastName, bookingStatus, fullName },
+      durationMs: Date.now() - stepStartParse,
+      timestamp: new Date().toISOString(),
+    });
+
     // Log what we extracted
     console.log("Extracted data:", { email, firstName, lastName, bookingStatus });
 
     // If we don't have email, we can't process further
     if (!email) {
+      stepLogs.push({
+        name: "Validate Email",
+        status: "failed",
+        error: "No email found in payload",
+        durationMs: 0,
+        timestamp: new Date().toISOString(),
+      });
+
       await sendSlackNotification({
         text: `⚠️ Attio Webhook: Keine Email gefunden`,
       });
+
+      // Update execution log as failed
+      if (logId && workflow) {
+        const durationMs = Date.now() - startTime;
+        await updateExecutionLog(logId, {
+          status: "failed",
+          errorMessage: "No email in payload",
+          stepLogs,
+          completedAt: new Date(),
+          durationMs,
+        });
+        await incrementExecutionStats(workflow.id, false);
+      }
+
       return NextResponse.json({ error: "No email in payload" }, { status: 400 });
     }
 
     console.log(`Processing for: ${fullName} (${email}) - Status: ${bookingStatus || "unknown"}`);
 
-    // Get booking from DB
+    // Step 2: Get booking from DB
+    const stepStartBooking = Date.now();
     const booking = await getBookingByEmail(email);
+    stepLogs.push({
+      name: "Lookup Booking",
+      status: booking ? "success" : "skipped",
+      input: { email },
+      output: booking ? { bookingId: booking.id, userId: booking.userId } : null,
+      error: booking ? undefined : "No booking found for this email",
+      durationMs: Date.now() - stepStartBooking,
+      timestamp: new Date().toISOString(),
+    });
+
     let emailSent = false;
     let action = "none";
 
@@ -83,41 +153,170 @@ export async function POST(request: Request) {
     if (bookingStatus === STATUS_NO_SHOW) {
       action = "no_show";
 
-      // 1. Update booking status in DB
+      // Step 3a: Update booking status in DB
       if (booking) {
-        await markBookingAsNoShow(booking.id);
-        console.log(`Marked booking ${booking.id} as no_show`);
+        const stepStartUpdate = Date.now();
+        try {
+          await markBookingAsNoShow(booking.id);
+          console.log(`Marked booking ${booking.id} as no_show`);
+          stepLogs.push({
+            name: "Mark Booking as No-Show",
+            status: "success",
+            input: { bookingId: booking.id },
+            output: { status: "no_show" },
+            durationMs: Date.now() - stepStartUpdate,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (error) {
+          stepLogs.push({
+            name: "Mark Booking as No-Show",
+            status: "failed",
+            input: { bookingId: booking.id },
+            error: error instanceof Error ? error.message : "Unknown error",
+            durationMs: Date.now() - stepStartUpdate,
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
 
-      // 2. Send Slack notification
-      await sendSlackNotification({
-        text: `🚫 ${fullName} wurde als No-Show markiert (${email})`,
-      });
+      // Step 3b: Send Slack notification
+      const stepStartSlack = Date.now();
+      try {
+        await sendSlackNotification({
+          text: `🚫 ${fullName} wurde als No-Show markiert (${email})`,
+        });
+        stepLogs.push({
+          name: "Send Slack Notification",
+          status: "success",
+          output: { message: `No-Show: ${fullName}` },
+          durationMs: Date.now() - stepStartSlack,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        stepLogs.push({
+          name: "Send Slack Notification",
+          status: "failed",
+          error: error instanceof Error ? error.message : "Unknown error",
+          durationMs: Date.now() - stepStartSlack,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
-      // 3. Send No-Show email
+      // Step 3c: Send No-Show email
       if (booking) {
+        const stepStartEmail = Date.now();
         emailSent = await sendNoShowEmail(booking, email, firstName);
+        stepLogs.push({
+          name: "Send No-Show Email",
+          status: emailSent ? "success" : "failed",
+          input: { to: email, firstName },
+          error: emailSent ? undefined : "Failed to send email",
+          durationMs: Date.now() - stepStartEmail,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        stepLogs.push({
+          name: "Send No-Show Email",
+          status: "skipped",
+          error: "No booking found - cannot send email",
+          durationMs: 0,
+          timestamp: new Date().toISOString(),
+        });
       }
 
     } else if (bookingStatus === STATUS_MEETING_RUNNING) {
       action = "meeting_running";
 
-      // 1. Send Slack notification
-      await sendSlackNotification({
-        text: `⏰ Meeting mit ${fullName} läuft - Person fehlt (${email})`,
-      });
+      // Step 3a: Send Slack notification
+      const stepStartSlack = Date.now();
+      try {
+        await sendSlackNotification({
+          text: `⏰ Meeting mit ${fullName} läuft - Person fehlt (${email})`,
+        });
+        stepLogs.push({
+          name: "Send Slack Notification",
+          status: "success",
+          output: { message: `Meeting running: ${fullName}` },
+          durationMs: Date.now() - stepStartSlack,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        stepLogs.push({
+          name: "Send Slack Notification",
+          status: "failed",
+          error: error instanceof Error ? error.message : "Unknown error",
+          durationMs: Date.now() - stepStartSlack,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
-      // 2. Send "Meeting Running" email with join link
+      // Step 3b: Send "Meeting Running" email with join link
       if (booking) {
+        const stepStartEmail = Date.now();
         emailSent = await sendMeetingRunningEmail(booking, email, firstName);
+        stepLogs.push({
+          name: "Send Meeting Running Email",
+          status: emailSent ? "success" : "failed",
+          input: { to: email, firstName, meetingLink: booking.meetingLink },
+          error: emailSent ? undefined : "Failed to send email",
+          durationMs: Date.now() - stepStartEmail,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        stepLogs.push({
+          name: "Send Meeting Running Email",
+          status: "skipped",
+          error: "No booking found - cannot send email",
+          durationMs: 0,
+          timestamp: new Date().toISOString(),
+        });
       }
 
     } else {
       // Unknown or unhandled status - just log it
       console.log(`Unhandled booking status: ${bookingStatus}`);
+      const stepStartSlack = Date.now();
       await sendSlackNotification({
         text: `ℹ️ Attio Status-Änderung: ${fullName} (${email}) → ${bookingStatus || "unbekannt"}`,
       });
+      stepLogs.push({
+        name: "Log Unknown Status",
+        status: "success",
+        output: { status: bookingStatus || "unbekannt" },
+        durationMs: Date.now() - stepStartSlack,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Check if any critical step failed
+    const hasCriticalFailure = stepLogs.some(
+      (s) => s.status === "failed" && (s.name.includes("Email") || s.name.includes("Booking"))
+    );
+
+    // Update execution log with success/partial success
+    const durationMs = Date.now() - startTime;
+    const finalStatus = hasCriticalFailure ? "failed" : "success";
+
+    if (logId && workflow) {
+      await updateExecutionLog(logId, {
+        status: finalStatus,
+        outputPayload: { email, fullName, bookingStatus, action, bookingFound: !!booking, emailSent },
+        stepLogs,
+        completedAt: new Date(),
+        durationMs,
+      });
+      await incrementExecutionStats(workflow.id, !hasCriticalFailure);
+
+      // Send execution summary to Slack
+      await sendSlackNotification(
+        formatExecutionLogForSlack({
+          workflowName: workflow.name,
+          status: finalStatus,
+          durationMs,
+          triggerType: "webhook",
+          stepLogs,
+        })
+      );
     }
 
     return NextResponse.json({
@@ -133,15 +332,42 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Attio webhook error:", error);
+    const durationMs = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
-    // Send compact error to Slack
-    await sendSlackNotification({
-      text: `❌ Attio Webhook Fehler: ${error instanceof Error ? error.message : "Unknown error"}`,
-    });
+    // Update execution log as failed
+    if (logId && workflow) {
+      await updateExecutionLog(logId, {
+        status: "failed",
+        errorMessage,
+        errorStack: error instanceof Error ? error.stack : undefined,
+        stepLogs,
+        completedAt: new Date(),
+        durationMs,
+      });
+      await incrementExecutionStats(workflow.id, false);
+
+      // Send error summary to Slack
+      await sendSlackNotification(
+        formatExecutionLogForSlack({
+          workflowName: workflow.name,
+          status: "failed",
+          durationMs,
+          triggerType: "webhook",
+          stepLogs,
+          errorMessage,
+        })
+      );
+    } else {
+      // Send compact error to Slack if no workflow found
+      await sendSlackNotification({
+        text: `❌ Attio Webhook Fehler: ${errorMessage}`,
+      });
+    }
 
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: errorMessage,
       },
       { status: 500 }
     );
