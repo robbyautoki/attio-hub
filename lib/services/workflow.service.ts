@@ -23,7 +23,11 @@ export async function createWorkflow(
   const now = new Date();
 
   // Generate webhook path and secret for webhook triggers
-  const webhookPath = data.triggerType === "webhook" ? generateWebhookPath() : null;
+  // Use fixed path if provided in triggerConfig (e.g., for Attio webhooks)
+  const fixedPath = data.triggerConfig?.fixedWebhookPath as string | undefined;
+  const webhookPath = data.triggerType === "webhook"
+    ? (fixedPath || generateWebhookPath())
+    : null;
   const webhookSecret = data.triggerType === "webhook" ? generateWebhookSecret() : null;
 
   const [newWorkflow] = await db

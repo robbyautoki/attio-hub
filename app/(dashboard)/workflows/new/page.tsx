@@ -29,6 +29,7 @@ const TRIGGER_OPTIONS = [
 const INTEGRATION_OPTIONS = [
   { value: "attio", label: "Attio CRM" },
   { value: "klaviyo", label: "Klaviyo" },
+  { value: "slack", label: "Slack" },
 ];
 
 const WORKFLOW_TEMPLATES = [
@@ -43,6 +44,21 @@ const WORKFLOW_TEMPLATES = [
       events: ["BOOKING_CREATED", "BOOKING_RESCHEDULED", "BOOKING_CANCELLED"],
     },
     requiredIntegrations: ["attio", "klaviyo"],
+  },
+  {
+    id: "attio-no-show",
+    name: "Attio No-Show Handler",
+    description:
+      "Wenn in Attio der Booking-Status auf 'No-Show' gesetzt wird, wird die Buchung markiert und eine Slack-Benachrichtigung gesendet.",
+    triggerType: "webhook",
+    triggerConfig: {
+      provider: "attio",
+      fixedWebhookPath: "attio",
+      events: ["record.attribute-value.updated"],
+      attributeSlug: "booking_status",
+      triggerValue: "No-Show",
+    },
+    requiredIntegrations: ["attio", "slack"],
   },
 ];
 
