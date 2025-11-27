@@ -204,11 +204,6 @@ export async function POST(request: Request) {
         const email = user.email as string;
         const fullName = (user.full_name || user.name || "") as string;
 
-        // Split full name into first/last
-        const nameParts = fullName.split(" ");
-        const firstName = nameParts[0] || "";
-        const lastName = nameParts.slice(1).join(" ") || "";
-
         if (email && workflow) {
           // Get Attio API key (using workflow owner's userId)
           const attioApiKey = await getDecryptedApiKeyByService(workflow.userId, "attio");
@@ -217,12 +212,10 @@ export async function POST(request: Request) {
             const attioClient = createAttioClient(attioApiKey);
 
             // Create/update person in Attio
-            // Pass empty strings as undefined - attio.ts handles filtering
+            // Only use full_name - no first/last name split to avoid Attio API issues
             const attioResult = await attioClient.upsertPerson({
               email,
               name: fullName.trim() || undefined,
-              firstName: firstName.trim() || undefined,
-              lastName: lastName.trim() || undefined,
             }) as { data?: { id?: { record_id?: string } } };
 
             // Extract record_id from upsert result and add to Academy list

@@ -81,17 +81,10 @@ export class AttioClient {
       email_addresses: [{ email_address: data.email }],
     };
 
-    // Add name - only include fields that have actual non-empty values
-    // Attio rejects undefined and empty strings for name fields
-    if (data.name || data.firstName || data.lastName) {
-      const nameObj: { full_name?: string; first_name?: string; last_name?: string } = {};
-      if (data.name && data.name.trim()) nameObj.full_name = data.name;
-      if (data.firstName && data.firstName.trim()) nameObj.first_name = data.firstName;
-      if (data.lastName && data.lastName.trim()) nameObj.last_name = data.lastName;
-      // Only add name if at least one field has a value
-      if (Object.keys(nameObj).length > 0) {
-        values.name = [nameObj];
-      }
+    // Add name - only use full_name to avoid first/last name split issues
+    // Attio's PUT API has issues with partial name objects on updates
+    if (data.name && data.name.trim()) {
+      values.name = [{ full_name: data.name.trim() }];
     }
 
     // Add phone
