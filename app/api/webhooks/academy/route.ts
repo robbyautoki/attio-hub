@@ -217,11 +217,12 @@ export async function POST(request: Request) {
             const attioClient = createAttioClient(attioApiKey);
 
             // Create/update person in Attio
+            // Pass empty strings as undefined - attio.ts handles filtering
             const attioResult = await attioClient.upsertPerson({
               email,
-              name: fullName || undefined,
-              firstName: firstName || undefined,
-              lastName: lastName || undefined,
+              name: fullName.trim() || undefined,
+              firstName: firstName.trim() || undefined,
+              lastName: lastName.trim() || undefined,
             }) as { data?: { id?: { record_id?: string } } };
 
             // Extract record_id from upsert result and add to Academy list
