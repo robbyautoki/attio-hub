@@ -173,8 +173,25 @@ export class AttioClient {
     }
 
     // Add company size (select field, slug: unternehmensgrosse)
+    // Attio expects German format with "Mitarbeiter" suffix
     if (data.companySize) {
-      values.unternehmensgrosse = data.companySize;
+      // Map common formats to Attio's German options
+      const sizeMap: Record<string, string> = {
+        "1-10": "1-10 Mitarbeiter",
+        "11-50": "11-50 Mitarbeiter",
+        "51-200": "51-200 Mitarbeiter",
+        "201-1000": "201-1000 Mitarbeiter",
+        "1000+": "1000+ Mitarbeiter",
+        // Also accept already formatted values
+        "1-10 Mitarbeiter": "1-10 Mitarbeiter",
+        "11-50 Mitarbeiter": "11-50 Mitarbeiter",
+        "51-200 Mitarbeiter": "51-200 Mitarbeiter",
+        "201-1000 Mitarbeiter": "201-1000 Mitarbeiter",
+        "1000+ Mitarbeiter": "1000+ Mitarbeiter",
+      };
+
+      const mappedSize = sizeMap[data.companySize] || `${data.companySize} Mitarbeiter`;
+      values.unternehmensgrosse = mappedSize;
     }
 
     // Use PUT with matching_attribute for upsert behavior
