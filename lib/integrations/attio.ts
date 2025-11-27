@@ -168,8 +168,60 @@ export class AttioClient {
     }
 
     // Add industry (select field, slug: industry)
+    // Attio has specific German industry options
     if (data.industry) {
-      values.industry = data.industry;
+      // Valid Attio industry options
+      const validIndustries = [
+        "SAAS / Software",
+        "E-Commerce",
+        "Agentur / Beratung",
+        "Finanzdienstleistungen",
+        "Immobilien",
+        "Gesundheitswesen",
+        "Bildung",
+        "Produktion / Fertigung",
+        "Sonstiges",
+      ];
+
+      // Map common English/variant names to Attio options
+      const industryMap: Record<string, string> = {
+        // English to German
+        "software": "SAAS / Software",
+        "saas": "SAAS / Software",
+        "tech": "SAAS / Software",
+        "technology": "SAAS / Software",
+        "ecommerce": "E-Commerce",
+        "e-commerce": "E-Commerce",
+        "retail": "E-Commerce",
+        "agency": "Agentur / Beratung",
+        "consulting": "Agentur / Beratung",
+        "beratung": "Agentur / Beratung",
+        "finance": "Finanzdienstleistungen",
+        "financial": "Finanzdienstleistungen",
+        "banking": "Finanzdienstleistungen",
+        "real estate": "Immobilien",
+        "realestate": "Immobilien",
+        "healthcare": "Gesundheitswesen",
+        "health": "Gesundheitswesen",
+        "medical": "Gesundheitswesen",
+        "education": "Bildung",
+        "manufacturing": "Produktion / Fertigung",
+        "production": "Produktion / Fertigung",
+        "other": "Sonstiges",
+      };
+
+      const lowerIndustry = data.industry.toLowerCase().trim();
+      let mappedIndustry = industryMap[lowerIndustry];
+
+      // If not in map, check if it's already a valid option
+      if (!mappedIndustry) {
+        const exactMatch = validIndustries.find(
+          (v) => v.toLowerCase() === lowerIndustry
+        );
+        mappedIndustry = exactMatch || "Sonstiges";
+      }
+
+      values.industry = mappedIndustry;
     }
 
     // Add company size (select field, slug: unternehmensgrosse)
