@@ -114,9 +114,24 @@ export class AttioClient {
       values.meeting_type = data.meetingType;
     }
 
-    // Add LinkedIn URL (text field, slug: linkedin)
+    // Add LinkedIn handle (slug: linkedin)
+    // Attio expects just the handle, not full URL
+    // Extract from: https://linkedin.com/in/username or https://www.linkedin.com/in/username/
     if (data.linkedinUrl) {
-      values.linkedin = data.linkedinUrl;
+      let linkedinHandle = data.linkedinUrl.trim();
+
+      // Extract handle from URL if it's a full URL
+      const linkedinMatch = linkedinHandle.match(/linkedin\.com\/in\/([^/?]+)/i);
+      if (linkedinMatch) {
+        linkedinHandle = linkedinMatch[1];
+      }
+
+      // Remove trailing slashes
+      linkedinHandle = linkedinHandle.replace(/\/$/, "");
+
+      if (linkedinHandle) {
+        values.linkedin = linkedinHandle;
+      }
     }
 
     // Add Job Title (text field, slug: job_title)
