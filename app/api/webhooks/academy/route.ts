@@ -192,60 +192,52 @@ export async function POST(request: Request) {
       });
     }
 
-    // Step 3: Add user to Attio (only for registration events)
+    // Determine event type
     const eventType = String(payload.event || payload.type || "").toLowerCase();
     const isRegistration = eventType.includes("registration") || eventType.includes("signup") || eventType.includes("created");
+    const isProfileUpdate = eventType.includes("profile_update") || eventType.includes("profile.update");
+    const isLeadInquiry = eventType.includes("lead.inquiry") || eventType.includes("lead_inquiry");
 
+    // Get Attio API key once for all Attio operations
+    let attioApiKey: string | null = null;
+    if (workflow) {
+      attioApiKey = await getDecryptedApiKeyByService(workflow.userId, "attio");
+    }
+
+    // Step 3: Handle user.registration - Add to Attio + Academy List
     if (isRegistration && payload.user) {
       const stepStartAttio = Date.now();
       try {
-        // Get user data from payload
         const user = payload.user as Record<string, unknown>;
         const email = user.email as string;
         const fullName = (user.full_name || user.name || "") as string;
 
-        if (email && workflow) {
-          // Get Attio API key (using workflow owner's userId)
-          const attioApiKey = await getDecryptedApiKeyByService(workflow.userId, "attio");
+        if (email && attioApiKey) {
+          const attioClient = createAttioClient(attioApiKey);
 
-          if (attioApiKey) {
-            const attioClient = createAttioClient(attioApiKey);
+          const attioResult = await attioClient.upsertPerson({
+            email,
+            name: fullName.trim() || undefined,
+          }) as { data?: { id?: { record_id?: string } } };
 
-            // Create/update person in Attio
-            // Only use full_name - no first/last name split to avoid Attio API issues
-            const attioResult = await attioClient.upsertPerson({
-              email,
-              name: fullName.trim() || undefined,
-            }) as { data?: { id?: { record_id?: string } } };
-
-            // Extract record_id from upsert result and add to Academy list
-            const recordId = attioResult?.data?.id?.record_id;
-            if (recordId) {
-              await addPersonToAcademyList(attioApiKey, recordId);
-            }
-
-            stepLogs.push({
-              name: "Add to Attio Academy List",
-              status: "success",
-              input: { email, fullName },
-              output: attioResult,
-              durationMs: Date.now() - stepStartAttio,
-              timestamp: new Date().toISOString(),
-            });
-          } else {
-            stepLogs.push({
-              name: "Add to Attio Academy List",
-              status: "skipped",
-              error: "Attio API key not configured",
-              durationMs: Date.now() - stepStartAttio,
-              timestamp: new Date().toISOString(),
-            });
+          const recordId = attioResult?.data?.id?.record_id;
+          if (recordId) {
+            await addPersonToAcademyList(attioApiKey, recordId);
           }
+
+          stepLogs.push({
+            name: "Add to Attio Academy List",
+            status: "success",
+            input: { email, fullName },
+            output: attioResult,
+            durationMs: Date.now() - stepStartAttio,
+            timestamp: new Date().toISOString(),
+          });
         } else {
           stepLogs.push({
             name: "Add to Attio Academy List",
             status: "skipped",
-            error: "No email in payload",
+            error: !email ? "No email in payload" : "Attio API key not configured",
             durationMs: Date.now() - stepStartAttio,
             timestamp: new Date().toISOString(),
           });
@@ -253,6 +245,139 @@ export async function POST(request: Request) {
       } catch (error) {
         stepLogs.push({
           name: "Add to Attio Academy List",
+          status: "failed",
+          error: error instanceof Error ? error.message : "Unknown error",
+          durationMs: Date.now() - stepStartAttio,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Step 4: Handle user.profile_update - Update Person + Company in Attio
+    if (isProfileUpdate && payload.user) {
+      const stepStartAttio = Date.now();
+      try {
+        const user = payload.user as Record<string, unknown>;
+        const email = user.email as string;
+        const jobTitle = (user.job_title || user.jobTitle || "") as string;
+        const industry = (user.industry || "") as string;
+        const companySize = (user.company_size || user.companySize || "") as string;
+
+        if (email && attioApiKey) {
+          const attioClient = createAttioClient(attioApiKey);
+
+          // Update person with job_title
+          const personResult = await attioClient.upsertPerson({
+            email,
+            jobTitle: jobTitle.trim() || undefined,
+          }) as { data?: { id?: { record_id?: string } } };
+
+          // If industry or company_size provided, update/create company
+          let companyResult = null;
+          if (industry || companySize) {
+            // Extract domain from email for company matching
+            const domain = email.split("@")[1];
+            if (domain && !domain.includes("gmail") && !domain.includes("yahoo") && !domain.includes("hotmail") && !domain.includes("outlook")) {
+              companyResult = await attioClient.upsertCompany({
+                domain,
+                industry: industry || undefined,
+                companySize: companySize || undefined,
+              });
+            }
+          }
+
+          stepLogs.push({
+            name: "Update Attio Profile",
+            status: "success",
+            input: { email, jobTitle, industry, companySize },
+            output: { personResult, companyResult },
+            durationMs: Date.now() - stepStartAttio,
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          stepLogs.push({
+            name: "Update Attio Profile",
+            status: "skipped",
+            error: !email ? "No email in payload" : "Attio API key not configured",
+            durationMs: Date.now() - stepStartAttio,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        stepLogs.push({
+          name: "Update Attio Profile",
+          status: "failed",
+          error: error instanceof Error ? error.message : "Unknown error",
+          durationMs: Date.now() - stepStartAttio,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Step 5: Handle lead.inquiry - Update Person with LinkedIn + Company
+    if (isLeadInquiry && payload.lead) {
+      const stepStartAttio = Date.now();
+      try {
+        const lead = payload.lead as Record<string, unknown>;
+        const email = (lead.email || "") as string;
+        const linkedinUrl = (lead.linkedin_url || lead.linkedinUrl || "") as string;
+        const jobTitle = (lead.job_title || lead.jobTitle || "") as string;
+        const industry = (lead.industry || "") as string;
+        const companySize = (lead.company_size || lead.companySize || "") as string;
+
+        if (email && attioApiKey) {
+          const attioClient = createAttioClient(attioApiKey);
+
+          // Update person with LinkedIn and job_title
+          const personResult = await attioClient.upsertPerson({
+            email,
+            linkedinUrl: linkedinUrl.trim() || undefined,
+            jobTitle: jobTitle.trim() || undefined,
+          }) as { data?: { id?: { record_id?: string } } };
+
+          // Add note about lead inquiry
+          const recordId = personResult?.data?.id?.record_id;
+          if (recordId) {
+            await attioClient.addNoteToPerson({
+              recordId,
+              title: "Lead-Anfrage aus Academy",
+              content: `Lead-Anfrage erhalten am ${new Date().toLocaleDateString("de-DE")}${jobTitle ? `\nJob: ${jobTitle}` : ""}${industry ? `\nBranche: ${industry}` : ""}`,
+            });
+          }
+
+          // Update company if industry/size provided
+          let companyResult = null;
+          if (industry || companySize) {
+            const domain = email.split("@")[1];
+            if (domain && !domain.includes("gmail") && !domain.includes("yahoo") && !domain.includes("hotmail") && !domain.includes("outlook")) {
+              companyResult = await attioClient.upsertCompany({
+                domain,
+                industry: industry || undefined,
+                companySize: companySize || undefined,
+              });
+            }
+          }
+
+          stepLogs.push({
+            name: "Process Lead Inquiry",
+            status: "success",
+            input: { email, linkedinUrl, jobTitle, industry, companySize },
+            output: { personResult, companyResult },
+            durationMs: Date.now() - stepStartAttio,
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          stepLogs.push({
+            name: "Process Lead Inquiry",
+            status: "skipped",
+            error: !email ? "No email in lead payload" : "Attio API key not configured",
+            durationMs: Date.now() - stepStartAttio,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        stepLogs.push({
+          name: "Process Lead Inquiry",
           status: "failed",
           error: error instanceof Error ? error.message : "Unknown error",
           durationMs: Date.now() - stepStartAttio,

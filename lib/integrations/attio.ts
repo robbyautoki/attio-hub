@@ -76,6 +76,9 @@ export class AttioClient {
     phone?: string | null;
     bookingStatus?: string | null;
     meetingType?: string | null;
+    // New fields for Academy
+    linkedinUrl?: string | null;
+    jobTitle?: string | null;
   }): Promise<unknown> {
     const values: Record<string, unknown> = {
       email_addresses: [{ email_address: data.email }],
@@ -111,12 +114,81 @@ export class AttioClient {
       values.meeting_type = data.meetingType;
     }
 
+    // Add LinkedIn URL (text field, slug: linkedin)
+    if (data.linkedinUrl) {
+      values.linkedin = data.linkedinUrl;
+    }
+
+    // Add Job Title (text field, slug: job_title)
+    if (data.jobTitle) {
+      values.job_title = data.jobTitle;
+    }
+
     // Use PUT with matching_attribute for upsert behavior
     // This creates if not exists, updates if exists (matched by email)
     return this.request("/objects/people/records?matching_attribute=email_addresses", {
       method: "PUT",
       body: JSON.stringify({
         data: { values },
+      }),
+    });
+  }
+
+  /**
+   * Create or update a company in Attio (upsert by domain)
+   */
+  async upsertCompany(data: {
+    domain: string;
+    name?: string | null;
+    industry?: string | null;
+    companySize?: string | null;
+  }): Promise<unknown> {
+    const values: Record<string, unknown> = {
+      domains: [{ domain: data.domain }],
+    };
+
+    // Add company name
+    if (data.name) {
+      values.name = data.name;
+    }
+
+    // Add industry (select field, slug: industry)
+    if (data.industry) {
+      values.industry = data.industry;
+    }
+
+    // Add company size (select field, slug: unternehmensgrosse)
+    if (data.companySize) {
+      values.unternehmensgrosse = data.companySize;
+    }
+
+    // Use PUT with matching_attribute for upsert behavior
+    return this.request("/objects/companies/records?matching_attribute=domains", {
+      method: "PUT",
+      body: JSON.stringify({
+        data: { values },
+      }),
+    });
+  }
+
+  /**
+   * Add a note to a person record
+   */
+  async addNoteToPerson(data: {
+    recordId: string;
+    title: string;
+    content: string;
+  }): Promise<unknown> {
+    return this.request("/notes", {
+      method: "POST",
+      body: JSON.stringify({
+        data: {
+          parent_object: "people",
+          parent_record_id: data.recordId,
+          title: data.title,
+          format: "plaintext",
+          content: data.content,
+        },
       }),
     });
   }
