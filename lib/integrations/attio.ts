@@ -81,10 +81,19 @@ export class AttioClient {
       email_addresses: [{ email_address: data.email }],
     };
 
-    // Add name - only use full_name to avoid first/last name split issues
-    // Attio's PUT API has issues with partial name objects on updates
+    // Add name - Attio requires ALL fields: full_name, first_name, last_name
+    // For single-word names, use the same value for all fields
     if (data.name && data.name.trim()) {
-      values.name = [{ full_name: data.name.trim() }];
+      const trimmedName = data.name.trim();
+      const nameParts = trimmedName.split(" ");
+      const firstName = nameParts[0] || trimmedName;
+      const lastName = nameParts.slice(1).join(" ") || trimmedName; // Single word: use same name
+
+      values.name = [{
+        full_name: trimmedName,
+        first_name: firstName,
+        last_name: lastName,
+      }];
     }
 
     // Add phone
