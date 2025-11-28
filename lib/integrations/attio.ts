@@ -302,12 +302,18 @@ export class AttioClient {
     personRecordId: string;
     companyRecordId?: string | null;
     stageName?: string;
-    value?: number;
+    ownerMemberId?: string;
   }): Promise<unknown> {
+    // Default owner: Robby's workspace member ID
+    const DEFAULT_OWNER_ID = "2ce03641-e43c-4dcf-9b31-e5a9a086ddac";
+
     const values: Record<string, unknown> = {
       name: data.name,
       stage: data.stageName || "Discovery Call",
-      value: data.value ?? 0,
+      owner: [{
+        referenced_actor_type: "workspace-member",
+        referenced_actor_id: data.ownerMemberId || DEFAULT_OWNER_ID,
+      }],
       associated_people: [{ target_object: "people", target_record_id: data.personRecordId }],
     };
 
