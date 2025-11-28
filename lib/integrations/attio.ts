@@ -309,12 +309,12 @@ export class AttioClient {
     const values: Record<string, unknown> = {
       name: data.name,
       stage: [{ status: data.stageStatusId || DISCOVERY_CALL_STATUS_ID }],
-      associated_people: [{ target_record_id: data.personRecordId }],
+      associated_people: [{ target_object: "people", target_record_id: data.personRecordId }],
     };
 
     // Add company link if provided
     if (data.companyRecordId) {
-      values.associated_company = [{ target_record_id: data.companyRecordId }];
+      values.associated_company = [{ target_object: "companies", target_record_id: data.companyRecordId }];
     }
 
     return this.request("/objects/deals/records", {
