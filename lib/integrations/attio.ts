@@ -301,14 +301,13 @@ export class AttioClient {
     name: string;
     personRecordId: string;
     companyRecordId?: string | null;
-    stageStatusId?: string;
+    stageName?: string;
+    value?: number;
   }): Promise<unknown> {
-    // Default stage: "Discovery Call" status ID
-    const DISCOVERY_CALL_STATUS_ID = "0feb4f77-f994-4347-b058-c43f5b3c8070";
-
     const values: Record<string, unknown> = {
       name: data.name,
-      stage: [{ status: data.stageStatusId || DISCOVERY_CALL_STATUS_ID }],
+      stage: data.stageName || "Discovery Call",
+      value: data.value ?? 0,
       associated_people: [{ target_object: "people", target_record_id: data.personRecordId }],
     };
 
