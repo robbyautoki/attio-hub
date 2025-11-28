@@ -308,7 +308,7 @@ export class AttioClient {
 
     const values: Record<string, unknown> = {
       name: data.name,
-      stage: [{ status_id: data.stageStatusId || DISCOVERY_CALL_STATUS_ID }],
+      stage: [{ status: data.stageStatusId || DISCOVERY_CALL_STATUS_ID }],
       associated_people: [{ target_record_id: data.personRecordId }],
     };
 
