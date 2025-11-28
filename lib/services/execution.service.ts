@@ -139,6 +139,7 @@ export async function executeCalcomWorkflow(
     const klaviyoKey = await getDecryptedApiKeyByService(workflow.userId, "klaviyo");
 
     // Execute Attio step
+    let personRecordId: string | null = null;
     if (attioKey && bookingData.email) {
       const stepStartAttio = Date.now();
       try {
@@ -151,7 +152,11 @@ export async function executeCalcomWorkflow(
           phone: bookingData.phone,
           bookingStatus: "Termin gebucht",
           meetingType: "Discovery Call",
-        });
+        }) as { data?: { id?: { record_id?: string } } };
+
+        // Extract person record ID for deal creation
+        personRecordId = attioResult?.data?.id?.record_id || null;
+
         stepLogs.push({
           name: "Create/Update Attio Contact",
           status: "success",
@@ -160,6 +165,49 @@ export async function executeCalcomWorkflow(
           durationMs: Date.now() - stepStartAttio,
           timestamp: new Date().toISOString(),
         });
+
+        // Create Deal linked to person (and company if available)
+        if (personRecordId) {
+          const stepStartDeal = Date.now();
+          try {
+            // Try to find company by email domain
+            let companyRecordId: string | null = null;
+            const emailDomain = bookingData.email.split("@")[1];
+            if (emailDomain && !["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com", "web.de", "gmx.de", "gmx.net"].includes(emailDomain.toLowerCase())) {
+              try {
+                const companyResult = await attioClient.findCompanyByDomain(emailDomain);
+                companyRecordId = companyResult?.data?.[0]?.id?.record_id || null;
+              } catch {
+                // Company not found, continue without
+              }
+            }
+
+            const dealName = bookingData.name || bookingData.email;
+            const dealResult = await attioClient.createDeal({
+              name: dealName,
+              personRecordId,
+              companyRecordId,
+            });
+
+            stepLogs.push({
+              name: "Create Attio Deal (Discovery Call)",
+              status: "success",
+              input: { dealName, personRecordId, companyRecordId },
+              output: dealResult,
+              durationMs: Date.now() - stepStartDeal,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (dealError) {
+            stepLogs.push({
+              name: "Create Attio Deal (Discovery Call)",
+              status: "failed",
+              input: { personRecordId },
+              error: dealError instanceof Error ? dealError.message : "Unknown error",
+              durationMs: Date.now() - stepStartDeal,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
       } catch (error) {
         stepLogs.push({
           name: "Create/Update Attio Contact",

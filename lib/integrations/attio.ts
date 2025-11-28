@@ -292,6 +292,54 @@ export class AttioClient {
       }),
     });
   }
+
+  /**
+   * Create a deal in Attio
+   * Links to person and optionally company
+   */
+  async createDeal(data: {
+    name: string;
+    personRecordId: string;
+    companyRecordId?: string | null;
+    stageStatusId?: string;
+  }): Promise<unknown> {
+    // Default stage: "Discovery Call" status ID
+    const DISCOVERY_CALL_STATUS_ID = "0feb4f77-f994-4347-b058-c43f5b3c8070";
+
+    const values: Record<string, unknown> = {
+      name: data.name,
+      stage: [{ status_id: data.stageStatusId || DISCOVERY_CALL_STATUS_ID }],
+      associated_people: [{ target_record_id: data.personRecordId }],
+    };
+
+    // Add company link if provided
+    if (data.companyRecordId) {
+      values.associated_company = [{ target_record_id: data.companyRecordId }];
+    }
+
+    return this.request("/objects/deals/records", {
+      method: "POST",
+      body: JSON.stringify({
+        data: { values },
+      }),
+    });
+  }
+
+  /**
+   * Find a company by domain
+   */
+  async findCompanyByDomain(domain: string): Promise<{ data?: Array<{ id?: { record_id?: string } }> }> {
+    return this.request("/objects/companies/records/query", {
+      method: "POST",
+      body: JSON.stringify({
+        filter: {
+          domains: {
+            domain: { "$eq": domain },
+          },
+        },
+      }),
+    });
+  }
 }
 
 /**
