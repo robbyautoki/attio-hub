@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 </html>`;
 
     const result = await resend.emails.send({
-      from: "autoki <hello@autoki.de>",
+      from: "autoki <robby@notifications.auto.ki>",
       to: email,
       subject: "Test: E-Mail Signatur",
       html: emailHtml,
