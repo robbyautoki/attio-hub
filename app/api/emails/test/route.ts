@@ -21,7 +21,7 @@ const signatureHtml = `<table cellpadding="0" cellspacing="0" border="0" style="
       <table cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td style="vertical-align: top; padding-right: 20px;">
-            <img src="https://attio-hub.vercel.app/signature-photo.jpg" alt="Robby Reinemann" width="90" height="90" style="border-radius: 50%; display: block;" />
+            <img src="https://attio-hub.vercel.app/signature-photo.png" alt="Robby Reinemann" width="90" height="90" style="border-radius: 50%; display: block;" />
           </td>
           <td style="vertical-align: top;">
             <table cellpadding="0" cellspacing="0" border="0">
