@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { createEmailLog, extractResendId } from "@/lib/services/email-log.service";
 
 // Lazy init for Resend
 let resendInstance: import("resend").Resend | null = null;
@@ -132,6 +134,7 @@ const signatureHtml = `<table cellpadding="0" cellspacing="0" border="0" style="
 
 export async function POST(request: Request) {
   try {
+    const { userId } = await auth();
     const { email } = await request.json();
 
     if (!email) {
@@ -162,6 +165,19 @@ export async function POST(request: Request) {
       subject: "Test: E-Mail Signatur",
       html: emailHtml,
     });
+
+    // Log the email if user is authenticated
+    if (userId) {
+      await createEmailLog({
+        emailType: "test",
+        to: email,
+        subject: "Test: E-Mail Signatur",
+        from: "autoki <robby@notifications.auto.ki>",
+        status: "sent",
+        resendId: extractResendId(result),
+        userId,
+      });
+    }
 
     return NextResponse.json({ success: true, result });
   } catch (error) {

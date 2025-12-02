@@ -12,6 +12,10 @@ import {
   createExecutionLog,
   updateExecutionLog,
 } from "@/lib/services/execution.service";
+import {
+  createEmailLog,
+  extractResendId,
+} from "@/lib/services/email-log.service";
 
 // Fixed workflow ID for the Reminder Cron
 const REMINDER_CRON_WORKFLOW_ID = "reminder-cron-workflow";
@@ -71,7 +75,7 @@ export async function GET(request: Request) {
         });
 
         // Send 24h reminder email using te-24h template
-        await resendClient.sendReminderEmail({
+        const response = await resendClient.sendReminderEmail({
           to: booking.email,
           templateSlug: "te-24h",
           variables: {
@@ -83,13 +87,36 @@ export async function GET(request: Request) {
           },
         });
 
+        // Log the email
+        await createEmailLog({
+          emailType: "reminder_24h",
+          to: booking.email,
+          subject: "Kleine Erinnerung für Morgen",
+          from: "Robby <robby@notifications.auto.ki>",
+          status: "sent",
+          resendId: extractResendId(response),
+          bookingId: booking.id,
+          userId: booking.userId,
+        });
+
         await markReminder24hSent(booking.id);
         results.reminder24h.sent++;
       } catch (error) {
         results.reminder24h.failed++;
-        results.errors.push(
-          `24h reminder for ${booking.email}: ${error instanceof Error ? error.message : "Unknown error"}`
-        );
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        results.errors.push(`24h reminder for ${booking.email}: ${errorMessage}`);
+
+        // Log failed email
+        await createEmailLog({
+          emailType: "reminder_24h",
+          to: booking.email,
+          subject: "Kleine Erinnerung für Morgen",
+          from: "Robby <robby@notifications.auto.ki>",
+          status: "failed",
+          errorMessage,
+          bookingId: booking.id,
+          userId: booking.userId,
+        });
       }
     }
 
@@ -116,7 +143,7 @@ export async function GET(request: Request) {
         });
 
         // Send 1h reminder email using te-1h template
-        await resendClient.send1hReminderEmail({
+        const response = await resendClient.send1hReminderEmail({
           to: booking.email,
           variables: {
             vorname: booking.firstName || "dort",
@@ -126,13 +153,36 @@ export async function GET(request: Request) {
           },
         });
 
+        // Log the email
+        await createEmailLog({
+          emailType: "reminder_1h",
+          to: booking.email,
+          subject: "Unser Termin beginnt gleich",
+          from: "Robby <robby@notifications.auto.ki>",
+          status: "sent",
+          resendId: extractResendId(response),
+          bookingId: booking.id,
+          userId: booking.userId,
+        });
+
         await markReminder1hSent(booking.id);
         results.reminder1h.sent++;
       } catch (error) {
         results.reminder1h.failed++;
-        results.errors.push(
-          `1h reminder for ${booking.email}: ${error instanceof Error ? error.message : "Unknown error"}`
-        );
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        results.errors.push(`1h reminder for ${booking.email}: ${errorMessage}`);
+
+        // Log failed email
+        await createEmailLog({
+          emailType: "reminder_1h",
+          to: booking.email,
+          subject: "Unser Termin beginnt gleich",
+          from: "Robby <robby@notifications.auto.ki>",
+          status: "failed",
+          errorMessage,
+          bookingId: booking.id,
+          userId: booking.userId,
+        });
       }
     }
 

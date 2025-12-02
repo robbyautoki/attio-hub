@@ -10,6 +10,8 @@ import {
   PlusIcon,
   CalendarIcon,
   MailIcon,
+  SendIcon,
+  EyeIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -48,6 +50,11 @@ const mainNavItems = [
     href: "/emails",
     icon: MailIcon,
   },
+  {
+    title: "Alle E-Mails",
+    href: "/emails/templates",
+    icon: EyeIcon,
+  },
 ];
 
 const settingsNavItems = [
@@ -60,6 +67,11 @@ const settingsNavItems = [
     title: "Logs",
     href: "/logs",
     icon: ScrollTextIcon,
+  },
+  {
+    title: "E-Mail Logs",
+    href: "/emails/logs",
+    icon: SendIcon,
   },
 ];
 

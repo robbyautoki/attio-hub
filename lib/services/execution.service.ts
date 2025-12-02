@@ -13,6 +13,7 @@ import { createAttioClient } from "@/lib/integrations/attio";
 import { createKlaviyoClient } from "@/lib/integrations/klaviyo";
 import { createResendClient } from "@/lib/integrations/resend";
 import { sendSlackNotification } from "@/lib/integrations/slack";
+import { createEmailLog, extractResendId } from "./email-log.service";
 
 export type ExecutionStatus = "pending" | "running" | "success" | "failed";
 
@@ -316,6 +317,17 @@ export async function executeCalcomWorkflow(
           scheduledAt,
         });
 
+        // Log the email
+        await createEmailLog({
+          emailType: "confirmation",
+          to: bookingData.email,
+          subject: "Dein Termin steht!",
+          from: "Auto.ki <robby@notifications.auto.ki>",
+          status: "sent",
+          resendId: extractResendId(resendResult),
+          userId: workflow.userId,
+        });
+
         stepLogs.push({
           name: "Send Booking Confirmation Email (Resend)",
           status: "success",
@@ -332,6 +344,19 @@ export async function executeCalcomWorkflow(
           timestamp: new Date().toISOString(),
         });
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+        // Log failed email
+        await createEmailLog({
+          emailType: "confirmation",
+          to: bookingData.email!,
+          subject: "Dein Termin steht!",
+          from: "Auto.ki <robby@notifications.auto.ki>",
+          status: "failed",
+          errorMessage,
+          userId: workflow.userId,
+        });
+
         stepLogs.push({
           name: "Send Booking Confirmation Email (Resend)",
           status: "failed",
@@ -339,7 +364,7 @@ export async function executeCalcomWorkflow(
             to: bookingData.email,
             vorname: bookingData.firstName,
           },
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: errorMessage,
           durationMs: Date.now() - stepStartResend,
           timestamp: new Date().toISOString(),
         });

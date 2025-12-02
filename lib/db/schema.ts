@@ -90,6 +90,31 @@ export const executionLogs = sqliteTable("execution_logs", {
   durationMs: integer("duration_ms"),
 });
 
+// ==================== EMAIL LOGS ====================
+export const emailLogs = sqliteTable("email_logs", {
+  id: text("id").primaryKey(),
+
+  // Email-Details
+  emailType: text("email_type").notNull(), // "confirmation" | "reminder_24h" | "reminder_1h" | "no_show" | "meeting_running" | "thank_you_discovery" | "thank_you_strategie" | "test"
+  to: text("to").notNull(),
+  subject: text("subject").notNull(),
+  from: text("from").notNull(),
+  htmlContent: text("html_content"), // Full HTML content of the email
+
+  // Status
+  status: text("status").notNull(), // "sent" | "failed" | "scheduled"
+  resendId: text("resend_id"), // Resend API response ID
+  errorMessage: text("error_message"),
+
+  // Referenzen (optional)
+  bookingId: text("booking_id"),
+  userId: text("user_id").notNull(),
+
+  // Timestamps
+  sentAt: integer("sent_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
 // ==================== BOOKINGS ====================
 export const bookings = sqliteTable("bookings", {
   id: text("id").primaryKey(),
@@ -158,3 +183,6 @@ export type NewExecutionLog = typeof executionLogs.$inferInsert;
 
 export type Booking = typeof bookings.$inferSelect;
 export type NewBooking = typeof bookings.$inferInsert;
+
+export type EmailLog = typeof emailLogs.$inferSelect;
+export type NewEmailLog = typeof emailLogs.$inferInsert;
