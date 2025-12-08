@@ -257,8 +257,7 @@ export async function executeCalcomWorkflow(
           const listResult = await klaviyoClient.subscribeToList(
             KLAVIYO_BOOKING_LIST_ID,
             bookingData.email,
-            bookingData.firstName || undefined,
-            bookingData.lastName || undefined
+            bookingData.firstName || undefined
           );
           stepLogs.push({
             name: "Add to Klaviyo Booking List",
@@ -317,16 +316,20 @@ export async function executeCalcomWorkflow(
           scheduledAt,
         });
 
-        // Log the email
-        await createEmailLog({
-          emailType: "confirmation",
-          to: bookingData.email,
-          subject: "Dein Termin steht!",
-          from: "Auto.ki <robby@notifications.auto.ki>",
-          status: "sent",
-          resendId: extractResendId(resendResult),
-          userId: workflow.userId,
-        });
+        // Log the email (fire and forget - don't let logging failures break the workflow)
+        try {
+          await createEmailLog({
+            emailType: "confirmation",
+            to: bookingData.email,
+            subject: "Dein Termin steht!",
+            from: "Auto.ki <robby@notifications.auto.ki>",
+            status: "sent",
+            resendId: extractResendId(resendResult),
+            userId: workflow.userId,
+          });
+        } catch (logError) {
+          console.error("Failed to log email (non-critical):", logError);
+        }
 
         stepLogs.push({
           name: "Send Booking Confirmation Email (Resend)",
@@ -346,16 +349,20 @@ export async function executeCalcomWorkflow(
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
-        // Log failed email
-        await createEmailLog({
-          emailType: "confirmation",
-          to: bookingData.email!,
-          subject: "Dein Termin steht!",
-          from: "Auto.ki <robby@notifications.auto.ki>",
-          status: "failed",
-          errorMessage,
-          userId: workflow.userId,
-        });
+        // Log failed email (fire and forget)
+        try {
+          await createEmailLog({
+            emailType: "confirmation",
+            to: bookingData.email!,
+            subject: "Dein Termin steht!",
+            from: "Auto.ki <robby@notifications.auto.ki>",
+            status: "failed",
+            errorMessage,
+            userId: workflow.userId,
+          });
+        } catch (logError) {
+          console.error("Failed to log email error (non-critical):", logError);
+        }
 
         stepLogs.push({
           name: "Send Booking Confirmation Email (Resend)",

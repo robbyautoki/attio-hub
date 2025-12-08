@@ -91,12 +91,12 @@ export class KlaviyoClient {
 
   /**
    * Subscribe a profile to a list
+   * Note: Klaviyo's subscription endpoint only accepts email and first_name
    */
   async subscribeToList(
     listId: string,
     email: string,
-    firstName?: string,
-    lastName?: string
+    firstName?: string
   ): Promise<unknown> {
     const payload = {
       data: {
@@ -109,7 +109,6 @@ export class KlaviyoClient {
                 attributes: {
                   email,
                   ...(firstName && { first_name: firstName }),
-                  ...(lastName && { last_name: lastName }),
                 },
               },
             ],

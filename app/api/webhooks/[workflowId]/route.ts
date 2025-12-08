@@ -5,6 +5,16 @@ import {
   executeCalcomWorkflow,
 } from "@/lib/services/execution.service";
 
+// In-memory cache to prevent duplicate webhook processing within a short time window
+const processedWebhooks = new Map<string, number>();
+const DUPLICATE_WINDOW_MS = 30000; // 30 seconds
+
+function getWebhookUniqueId(payload: Record<string, unknown>): string | null {
+  // Cal.com payload structure: payload.payload.uid is the unique booking identifier
+  const payloadData = payload.payload as Record<string, unknown> | undefined;
+  return (payloadData?.uid as string) || null;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ workflowId: string }> }
@@ -44,8 +54,38 @@ export async function POST(
       );
     }
 
+    // Idempotency check: Prevent duplicate webhook processing
+    const webhookUid = getWebhookUniqueId(payload);
+    if (webhookUid) {
+      const cacheKey = `${workflow.id}:${webhookUid}`;
+      const lastProcessed = processedWebhooks.get(cacheKey);
+
+      if (lastProcessed && Date.now() - lastProcessed < DUPLICATE_WINDOW_MS) {
+        console.log(`Duplicate webhook ignored for ${workflow.name}: ${webhookUid}`);
+        return NextResponse.json({
+          success: true,
+          message: "Webhook already processed (duplicate ignored)",
+          durationMs: Date.now() - startTime,
+        });
+      }
+
+      // Mark as processed immediately to prevent race conditions
+      processedWebhooks.set(cacheKey, Date.now());
+
+      // Clean up old entries periodically
+      if (processedWebhooks.size > 1000) {
+        const cutoff = Date.now() - DUPLICATE_WINDOW_MS;
+        for (const [key, timestamp] of processedWebhooks.entries()) {
+          if (timestamp < cutoff) {
+            processedWebhooks.delete(key);
+          }
+        }
+      }
+    }
+
     console.log(`Webhook received for workflow ${workflow.name}:`, {
       triggerEvent: payload.triggerEvent,
+      webhookUid,
       timestamp: new Date().toISOString(),
     });
 
