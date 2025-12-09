@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { getWorkflowByWebhookPath } from "@/lib/services/workflow.service";
 import {
   createExecutionLog,
@@ -92,11 +93,13 @@ export async function POST(
     // Create execution log
     const log = await createExecutionLog(workflow.id, "webhook", payload);
 
-    // Execute workflow in background (don't block the response)
+    // Execute workflow in background using waitUntil (keeps running after response)
     // This allows Cal.com to receive an immediate response while we process
-    executeCalcomWorkflow(workflow, payload, log.id).catch((error) => {
-      console.error(`Background workflow execution failed for ${workflow.id}:`, error);
-    });
+    waitUntil(
+      executeCalcomWorkflow(workflow, payload, log.id).catch((error) => {
+        console.error(`Background workflow execution failed for ${workflow.id}:`, error);
+      })
+    );
 
     // Respond immediately - Cal.com doesn't have to wait
     return NextResponse.json({
