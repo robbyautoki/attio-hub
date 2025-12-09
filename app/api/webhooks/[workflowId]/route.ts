@@ -92,29 +92,19 @@ export async function POST(
     // Create execution log
     const log = await createExecutionLog(workflow.id, "webhook", payload);
 
-    // Execute the workflow asynchronously
-    // For now, we execute synchronously and respond with the result
-    // In production, you might want to use a queue for this
-    try {
-      await executeCalcomWorkflow(workflow, payload, log.id);
+    // Execute workflow in background (don't block the response)
+    // This allows Cal.com to receive an immediate response while we process
+    executeCalcomWorkflow(workflow, payload, log.id).catch((error) => {
+      console.error(`Background workflow execution failed for ${workflow.id}:`, error);
+    });
 
-      return NextResponse.json({
-        success: true,
-        executionId: log.id,
-        message: "Workflow executed successfully",
-        durationMs: Date.now() - startTime,
-      });
-    } catch (error) {
-      console.error(`Workflow execution failed for ${workflow.id}:`, error);
-
-      return NextResponse.json({
-        success: false,
-        executionId: log.id,
-        message: "Workflow execution failed",
-        error: error instanceof Error ? error.message : "Unknown error",
-        durationMs: Date.now() - startTime,
-      });
-    }
+    // Respond immediately - Cal.com doesn't have to wait
+    return NextResponse.json({
+      success: true,
+      executionId: log.id,
+      message: "Webhook received, processing in background",
+      durationMs: Date.now() - startTime,
+    });
   } catch (error) {
     console.error("Webhook handler error:", error);
     return NextResponse.json(
