@@ -25,7 +25,10 @@ interface SlackBlock {
   type: string;
   text?: { type: string; text: string; emoji?: boolean };
   fields?: { type: string; text: string }[];
-  elements?: { type: string; text?: { type: string; text: string }; url?: string; style?: string }[];
+  elements?: (
+    | { type: "button"; text: { type: string; text: string }; url?: string; style?: string }
+    | { type: "mrkdwn"; text: string }
+  )[];
 }
 
 /**
