@@ -171,15 +171,26 @@ export async function executeCalcomWorkflow(
         if (personRecordId) {
           const stepStartDeal = Date.now();
           try {
-            // Try to find company by email domain
+            // Try to find company by email domain, or create if not found
             let companyRecordId: string | null = null;
             const emailDomain = bookingData.email.split("@")[1];
             if (emailDomain && !["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com", "web.de", "gmx.de", "gmx.net"].includes(emailDomain.toLowerCase())) {
               try {
+                // First try to find existing company
                 const companyResult = await attioClient.findCompanyByDomain(emailDomain);
                 companyRecordId = companyResult?.data?.[0]?.id?.record_id || null;
+
+                // If not found, create company via upsert
+                if (!companyRecordId) {
+                  const companyName = emailDomain.split('.')[0].replace(/-/g, ' ');
+                  const upsertResult = await attioClient.upsertCompany({
+                    domain: emailDomain,
+                    name: companyName.charAt(0).toUpperCase() + companyName.slice(1),
+                  }) as { data?: { id?: { record_id?: string } } };
+                  companyRecordId = upsertResult?.data?.id?.record_id || null;
+                }
               } catch {
-                // Company not found, continue without
+                // Company lookup/creation failed, continue without
               }
             }
 
