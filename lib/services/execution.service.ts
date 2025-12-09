@@ -180,11 +180,12 @@ export async function executeCalcomWorkflow(
                 const companyResult = await attioClient.findCompanyByDomain(emailDomain);
                 companyRecordId = companyResult?.data?.[0]?.id?.record_id || null;
 
-                // If not found, create company via upsert (only set domain, let Attio enrich the rest)
+                // If not found, create company via upsert
                 if (!companyRecordId) {
+                  const companyName = emailDomain.split('.')[0].replace(/-/g, ' ');
                   const upsertResult = await attioClient.upsertCompany({
                     domain: emailDomain,
-                    // Don't set name - Attio will auto-enrich it based on domain
+                    name: companyName.charAt(0).toUpperCase() + companyName.slice(1),
                   }) as { data?: { id?: { record_id?: string } } };
                   companyRecordId = upsertResult?.data?.id?.record_id || null;
                 }
