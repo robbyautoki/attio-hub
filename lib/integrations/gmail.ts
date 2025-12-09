@@ -417,3 +417,103 @@ export async function send1hReminderEmail(data: {
     html,
   });
 }
+
+/**
+ * Send No-Show email when someone misses their appointment
+ */
+export async function sendNoShowEmail(data: {
+  to: string;
+  vorname: string;
+  terminart: string;
+  datum: string;
+  uhrzeit: string;
+}): Promise<{ id: string; threadId: string }> {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="font-size: 28px; margin-bottom: 24px;">Schade, dass wir dich verpasst haben</h1>
+
+  <p>Hey ${data.vorname},</p>
+
+  <p>wir hatten uns auf unser Gespräch gefreut, aber leider konnten wir dich nicht erreichen:</p>
+
+  <div style="background-color: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0;">
+    <p style="margin: 0;"><strong>Was:</strong> ${data.terminart}</p>
+    <p style="margin: 8px 0 0;"><strong>Wann:</strong> ${data.datum} um ${data.uhrzeit} Uhr</p>
+  </div>
+
+  <p>Kein Problem – das Leben ist manchmal unberechenbar! Falls du immer noch Interesse hast, kannst du ganz einfach einen neuen Termin buchen:</p>
+
+  <a href="https://cal.com/auto-ki/discovery" style="display: inline-block; background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 16px 0;">Neuen Termin buchen</a>
+
+  <p>Falls du Fragen hast oder etwas dazwischengekommen ist, antworte einfach auf diese Email.</p>
+
+  <p>Liebe Grüße</p>
+
+  <p style="margin-top: 24px;"><strong>Matthias von auto.ki</strong></p>
+</body>
+</html>
+  `.trim();
+
+  return sendGmailEmail({
+    to: data.to,
+    subject: "Schade, dass wir dich verpasst haben",
+    html,
+  });
+}
+
+/**
+ * Send Meeting Running email when meeting started but attendee hasn't joined
+ */
+export async function sendMeetingRunningEmail(data: {
+  to: string;
+  vorname: string;
+  terminart: string;
+  uhrzeit: string;
+  meetingLink: string;
+}): Promise<{ id: string; threadId: string }> {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="font-size: 28px; margin-bottom: 24px;">Dein Meeting läuft gerade!</h1>
+
+  <p>Hey ${data.vorname},</p>
+
+  <p>wir sitzen gerade im Meeting und warten auf dich! Das Gespräch hat um <strong>${data.uhrzeit} Uhr</strong> begonnen.</p>
+
+  <div style="background-color: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0;">
+    <p style="margin: 0;"><strong>Was:</strong> ${data.terminart}</p>
+    <p style="margin: 8px 0 0;"><strong>Gestartet um:</strong> ${data.uhrzeit} Uhr</p>
+  </div>
+
+  <p>Klicke einfach auf den Button, um direkt beizutreten:</p>
+
+  <a href="${data.meetingLink}" style="display: inline-block; background-color: #22c55e; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 4px; margin: 16px 0; font-weight: bold;">Jetzt beitreten</a>
+
+  <p>Falls du es heute nicht schaffst, antworte kurz auf diese Email – dann finden wir einen neuen Termin.</p>
+
+  <p>Bis gleich!</p>
+
+  <p>Liebe Grüße</p>
+
+  <p style="margin-top: 24px;"><strong>Matthias von auto.ki</strong></p>
+</body>
+</html>
+  `.trim();
+
+  return sendGmailEmail({
+    to: data.to,
+    subject: "Dein Meeting läuft gerade – wir warten auf dich!",
+    html,
+  });
+}

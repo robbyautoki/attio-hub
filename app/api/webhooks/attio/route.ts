@@ -9,6 +9,8 @@ import {
   sendThankYouDiscoveryEmail as sendGmailThankYouDiscovery,
   sendThankYouStrategieEmail as sendGmailThankYouStrategie,
   sendCancelledRebookEmail as sendGmailCancelledRebook,
+  sendNoShowEmail as sendGmailNoShow,
+  sendMeetingRunningEmail as sendGmailMeetingRunning,
   isGmailConfigured,
 } from "@/lib/integrations/gmail";
 
@@ -466,20 +468,13 @@ export async function POST(request: Request) {
   }
 }
 
-// Helper function to send No-Show email
+// Helper function to send No-Show email (via Gmail/matthias@auto.ki)
 async function sendNoShowEmail(
   booking: { userId: string; firstName: string | null; startTime: Date; eventType: string | null },
   email: string,
   firstName: string | undefined
 ): Promise<boolean> {
   try {
-    const resendKey = await getDecryptedApiKeyByService(booking.userId, "resend");
-    if (!resendKey) {
-      console.log("No Resend API key found for user");
-      return false;
-    }
-
-    const resendClient = createResendClient(resendKey);
     const startDate = new Date(booking.startTime);
 
     const datum = startDate.toLocaleDateString("de-DE", {
@@ -493,17 +488,45 @@ async function sendNoShowEmail(
       minute: "2-digit",
     });
 
+    const vorname = booking.firstName || firstName || "dort";
+    const terminart = booking.eventType || "Discovery Call";
+
+    // Try Gmail first (sends from matthias@auto.ki)
+    if (isGmailConfigured()) {
+      try {
+        await sendGmailNoShow({
+          to: email,
+          vorname,
+          terminart,
+          datum,
+          uhrzeit,
+        });
+        console.log(`No-Show email sent via Gmail to ${email}`);
+        return true;
+      } catch (gmailError) {
+        console.error("Gmail failed for No-Show email, falling back to Resend:", gmailError);
+      }
+    }
+
+    // Fallback to Resend
+    const resendKey = await getDecryptedApiKeyByService(booking.userId, "resend");
+    if (!resendKey) {
+      console.log("No Resend API key found for user");
+      return false;
+    }
+
+    const resendClient = createResendClient(resendKey);
     await resendClient.sendNoShowEmail({
       to: email,
       variables: {
-        vorname: booking.firstName || firstName || "dort",
-        terminart: booking.eventType || "Discovery Call",
+        vorname,
+        terminart,
         datum,
         uhrzeit,
       },
     });
 
-    console.log(`No-Show email sent to ${email}`);
+    console.log(`No-Show email sent via Resend to ${email}`);
     return true;
   } catch (emailError) {
     console.error("Failed to send No-Show email:", emailError);
@@ -514,20 +537,13 @@ async function sendNoShowEmail(
   }
 }
 
-// Helper function to send Meeting Running email
+// Helper function to send Meeting Running email (via Gmail/matthias@auto.ki)
 async function sendMeetingRunningEmail(
   booking: { userId: string; firstName: string | null; startTime: Date; eventType: string | null; meetingLink: string | null },
   email: string,
   firstName: string | undefined
 ): Promise<boolean> {
   try {
-    const resendKey = await getDecryptedApiKeyByService(booking.userId, "resend");
-    if (!resendKey) {
-      console.log("No Resend API key found for user");
-      return false;
-    }
-
-    const resendClient = createResendClient(resendKey);
     const startDate = new Date(booking.startTime);
 
     const uhrzeit = startDate.toLocaleTimeString("de-DE", {
@@ -535,17 +551,46 @@ async function sendMeetingRunningEmail(
       minute: "2-digit",
     });
 
+    const vorname = booking.firstName || firstName || "dort";
+    const terminart = booking.eventType || "Discovery Call";
+    const meetingLink = booking.meetingLink || "https://cal.com/auto-ki/discovery";
+
+    // Try Gmail first (sends from matthias@auto.ki)
+    if (isGmailConfigured()) {
+      try {
+        await sendGmailMeetingRunning({
+          to: email,
+          vorname,
+          terminart,
+          uhrzeit,
+          meetingLink,
+        });
+        console.log(`Meeting Running email sent via Gmail to ${email}`);
+        return true;
+      } catch (gmailError) {
+        console.error("Gmail failed for Meeting Running email, falling back to Resend:", gmailError);
+      }
+    }
+
+    // Fallback to Resend
+    const resendKey = await getDecryptedApiKeyByService(booking.userId, "resend");
+    if (!resendKey) {
+      console.log("No Resend API key found for user");
+      return false;
+    }
+
+    const resendClient = createResendClient(resendKey);
     await resendClient.sendMeetingRunningEmail({
       to: email,
       variables: {
-        vorname: booking.firstName || firstName || "dort",
-        terminart: booking.eventType || "Discovery Call",
+        vorname,
+        terminart,
         uhrzeit,
-        meetingLink: booking.meetingLink || "https://cal.com/auto-ki/discovery",
+        meetingLink,
       },
     });
 
-    console.log(`Meeting Running email sent to ${email}`);
+    console.log(`Meeting Running email sent via Resend to ${email}`);
     return true;
   } catch (emailError) {
     console.error("Failed to send Meeting Running email:", emailError);
