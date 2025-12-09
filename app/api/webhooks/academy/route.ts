@@ -20,10 +20,18 @@ interface StepLog {
   timestamp: string;
 }
 
+// Slack Block Kit types
+interface SlackBlock {
+  type: string;
+  text?: { type: string; text: string; emoji?: boolean };
+  fields?: { type: string; text: string }[];
+  elements?: { type: string; text?: { type: string; text: string }; url?: string; style?: string }[];
+}
+
 /**
- * Send notification to Academy Slack channel
+ * Send Block Kit notification to Academy Slack channel
  */
-async function sendAcademySlackNotification(text: string): Promise<void> {
+async function sendAcademySlackBlocks(blocks: SlackBlock[], fallbackText: string): Promise<void> {
   if (!ACADEMY_SLACK_WEBHOOK) {
     throw new Error("ACADEMY_SLACK_WEBHOOK_URL not configured");
   }
@@ -33,7 +41,10 @@ async function sendAcademySlackNotification(text: string): Promise<void> {
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({
+      text: fallbackText,
+      blocks
+    }),
   });
 
   if (!response.ok) {
@@ -42,62 +53,127 @@ async function sendAcademySlackNotification(text: string): Promise<void> {
 }
 
 /**
- * Format Academy event for Slack
+ * Format Registration event as Slack Block Kit
  */
-function formatAcademyEvent(payload: Record<string, unknown>): string {
-  const eventType = payload.event || payload.type || payload.eventType || "unknown";
-  const user = payload.user || payload.member || payload.student;
-  const course = payload.course || payload.product || payload.item;
+function formatRegistrationBlocks(user: Record<string, unknown>): SlackBlock[] {
+  const name = (user.full_name || user.name || "Unbekannt") as string;
+  const email = (user.email || "") as string;
 
-  // Extract user info
-  let userName = "Unbekannt";
-  let userEmail = "";
-  if (typeof user === "object" && user !== null) {
-    const u = user as Record<string, unknown>;
-    userName = (u.name || u.full_name || u.firstName || "Unbekannt") as string;
-    userEmail = (u.email || "") as string;
-  } else if (typeof user === "string") {
-    userName = user;
+  return [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: "🎉 Neue Academy Registrierung",
+        emoji: true,
+      },
+    },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Name:*\n${name}` },
+        { type: "mrkdwn", text: `*Email:*\n${email}` },
+      ],
+    },
+    {
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: `📅 ${new Date().toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" })}` },
+      ],
+    },
+  ];
+}
+
+/**
+ * Format Profile Update event as Slack Block Kit
+ */
+function formatProfileUpdateBlocks(user: Record<string, unknown>): SlackBlock[] {
+  const name = (user.full_name || user.name || "Unbekannt") as string;
+  const email = (user.email || "") as string;
+  const companyName = (user.company_name || "") as string;
+  const website = (user.website || "") as string;
+  const jobTitle = (user.job_title || user.jobTitle || "") as string;
+  const industry = (user.industry || "") as string;
+  const companySize = (user.company_size || user.companySize || "") as string;
+  const linkedinUrl = (user.linkedin_url || user.linkedinUrl || "") as string;
+
+  const fields: { type: string; text: string }[] = [
+    { type: "mrkdwn", text: `*Name:*\n${name}` },
+    { type: "mrkdwn", text: `*Email:*\n${email}` },
+  ];
+
+  if (companyName) fields.push({ type: "mrkdwn", text: `*Unternehmen:*\n${companyName}` });
+  if (website) fields.push({ type: "mrkdwn", text: `*Website:*\n${website}` });
+  if (jobTitle) fields.push({ type: "mrkdwn", text: `*Position:*\n${jobTitle}` });
+  if (industry) fields.push({ type: "mrkdwn", text: `*Branche:*\n${industry}` });
+  if (companySize) fields.push({ type: "mrkdwn", text: `*Unternehmensgröße:*\n${companySize}` });
+
+  const blocks: SlackBlock[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: "📝 Profil aktualisiert",
+        emoji: true,
+      },
+    },
+    {
+      type: "section",
+      fields,
+    },
+  ];
+
+  // Add LinkedIn button if URL provided
+  if (linkedinUrl) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "🔗 LinkedIn Profil" },
+          url: linkedinUrl,
+          style: "primary",
+        },
+      ],
+    });
   }
 
-  // Extract course info
-  let courseName = "";
-  if (typeof course === "object" && course !== null) {
-    const c = course as Record<string, unknown>;
-    courseName = (c.name || c.title || "") as string;
-  } else if (typeof course === "string") {
-    courseName = course;
-  }
+  blocks.push({
+    type: "context",
+    elements: [
+      { type: "mrkdwn", text: `📅 ${new Date().toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" })}` },
+    ],
+  });
 
-  // Format based on event type
-  const eventStr = String(eventType).toLowerCase();
+  return blocks;
+}
 
-  if (eventStr.includes("signup") || eventStr.includes("register") || eventStr.includes("created")) {
-    return `🎉 Neuer Academy-User: ${userName}${userEmail ? ` (${userEmail})` : ""}`;
-  }
+/**
+ * Format generic Academy event for Slack (fallback)
+ */
+function formatGenericBlocks(payload: Record<string, unknown>): SlackBlock[] {
+  const eventType = payload.event || payload.type || "unknown";
+  const user = payload.user as Record<string, unknown> | undefined;
+  const name = user ? (user.full_name || user.name || "Unbekannt") as string : "Unbekannt";
+  const email = user ? (user.email || "") as string : "";
 
-  if (eventStr.includes("enroll") || eventStr.includes("purchase") || eventStr.includes("bought")) {
-    return `📚 Kurs-Anmeldung: ${userName} → ${courseName || "Unbekannter Kurs"}`;
-  }
-
-  if (eventStr.includes("complete") || eventStr.includes("finished") || eventStr.includes("graduated")) {
-    return `🏆 Kurs abgeschlossen: ${userName} hat "${courseName || "Kurs"}" beendet!`;
-  }
-
-  if (eventStr.includes("lesson") || eventStr.includes("progress")) {
-    return `📖 Fortschritt: ${userName} - ${courseName || "Lektion abgeschlossen"}`;
-  }
-
-  if (eventStr.includes("login") || eventStr.includes("session")) {
-    return `👋 Login: ${userName}`;
-  }
-
-  if (eventStr.includes("cancel") || eventStr.includes("refund")) {
-    return `⚠️ Stornierung: ${userName}${courseName ? ` - ${courseName}` : ""}`;
-  }
-
-  // Default format
-  return `📣 Academy Event: ${eventType}${userName !== "Unbekannt" ? ` - ${userName}` : ""}${courseName ? ` (${courseName})` : ""}`;
+  return [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: `📣 Academy Event: ${eventType}`,
+        emoji: true,
+      },
+    },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Name:*\n${name}` },
+        { type: "mrkdwn", text: `*Email:*\n${email}` },
+      ],
+    },
+  ];
 }
 
 /**
@@ -169,16 +245,35 @@ export async function POST(request: Request) {
       timestamp: new Date().toISOString(),
     });
 
-    // Step 2: Format and send Slack notification
+    // Determine event type early for Slack formatting
+    const eventType = String(payload.event || payload.type || "").toLowerCase();
+    const isRegistration = eventType.includes("registration") || eventType.includes("signup") || eventType.includes("created");
+    const isProfileUpdate = eventType.includes("profile_update") || eventType.includes("profile.update");
+
+    // Step 2: Format and send Slack notification with Block Kit
     const stepStartSlack = Date.now();
     try {
-      const message = formatAcademyEvent(payload);
-      await sendAcademySlackNotification(message);
+      const user = payload.user as Record<string, unknown> | undefined;
+      let blocks: SlackBlock[];
+      let fallbackText: string;
+
+      if (isRegistration && user) {
+        blocks = formatRegistrationBlocks(user);
+        fallbackText = `🎉 Neue Academy Registrierung: ${user.full_name || user.name || user.email}`;
+      } else if (isProfileUpdate && user) {
+        blocks = formatProfileUpdateBlocks(user);
+        fallbackText = `📝 Profil aktualisiert: ${user.full_name || user.name || user.email}`;
+      } else {
+        blocks = formatGenericBlocks(payload);
+        fallbackText = `📣 Academy Event: ${payload.event || payload.type}`;
+      }
+
+      await sendAcademySlackBlocks(blocks, fallbackText);
 
       stepLogs.push({
         name: "Send Academy Slack Notification",
         status: "success",
-        output: { message },
+        output: { blocks, fallbackText },
         durationMs: Date.now() - stepStartSlack,
         timestamp: new Date().toISOString(),
       });
@@ -192,10 +287,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // Determine event type
-    const eventType = String(payload.event || payload.type || "").toLowerCase();
-    const isRegistration = eventType.includes("registration") || eventType.includes("signup") || eventType.includes("created");
-    const isProfileUpdate = eventType.includes("profile_update") || eventType.includes("profile.update");
     const isLeadInquiry = eventType.includes("lead.inquiry") || eventType.includes("lead_inquiry");
 
     // Get Attio API key once for all Attio operations
