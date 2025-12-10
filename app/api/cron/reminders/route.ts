@@ -103,6 +103,11 @@ export async function GET(request: Request) {
 
         await markReminder24hSent(booking.id);
         results.reminder24h.sent++;
+
+        // Send Slack notification for successful reminder
+        await sendSlackNotification({
+          text: `📧 24h Reminder gesendet an ${booking.firstName || booking.email} - Termin: ${datum} um ${uhrzeit} Uhr`,
+        });
       } catch (error) {
         results.reminder24h.failed++;
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -170,6 +175,11 @@ export async function GET(request: Request) {
 
         await markReminder1hSent(booking.id);
         results.reminder1h.sent++;
+
+        // Send Slack notification for successful reminder
+        await sendSlackNotification({
+          text: `📧 1h Reminder gesendet an ${booking.firstName || booking.email} - Termin: Heute um ${uhrzeit} Uhr`,
+        });
       } catch (error) {
         results.reminder1h.failed++;
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
