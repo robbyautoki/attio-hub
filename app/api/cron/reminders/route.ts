@@ -62,16 +62,18 @@ export async function GET(request: Request) {
 
         const resendClient = createResendClient(resendKey);
 
-        // Format date and time for email
+        // Format date and time for email (in German timezone)
         const startDate = new Date(booking.startTime);
         const datum = startDate.toLocaleDateString("de-DE", {
           day: "numeric",
           month: "long",
           year: "numeric",
+          timeZone: "Europe/Berlin",
         });
         const uhrzeit = startDate.toLocaleTimeString("de-DE", {
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: "Europe/Berlin",
         });
 
         // Send 24h reminder email using te-24h template
@@ -135,11 +137,12 @@ export async function GET(request: Request) {
 
         const resendClient = createResendClient(resendKey);
 
-        // Format date and time for email
+        // Format date and time for email (in German timezone)
         const startDate = new Date(booking.startTime);
         const uhrzeit = startDate.toLocaleTimeString("de-DE", {
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: "Europe/Berlin",
         });
 
         // Send 1h reminder email using te-1h template
