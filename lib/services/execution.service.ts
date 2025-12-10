@@ -194,21 +194,59 @@ export async function executeCalcomWorkflow(
               }
             }
 
-            const dealName = bookingData.name || bookingData.email;
-            const dealResult = await attioClient.createDeal({
-              name: dealName,
-              personRecordId,
-              companyRecordId,
-            });
+            // Stage IDs from Attio
+            const NO_SHOW_STAGE_ID = "06a6e8aa-d398-400d-b27a-b3f76c7c7cda";
+            const DISCOVERY_CALL_STAGE_ID = "0feb4f77-f994-4347-b058-c43f5b3c8070";
 
-            stepLogs.push({
-              name: "Create Attio Deal (Discovery Call)",
-              status: "success",
-              input: { dealName, personRecordId, companyRecordId },
-              output: dealResult,
-              durationMs: Date.now() - stepStartDeal,
-              timestamp: new Date().toISOString(),
-            });
+            // Check if person already has a deal
+            const existingDeals = await attioClient.findDealsByPerson(personRecordId);
+            const existingDeal = existingDeals?.data?.[0];
+
+            if (existingDeal) {
+              const dealId = existingDeal.id?.record_id;
+              const currentStageId = existingDeal.values?.stage?.[0]?.status_id;
+              const currentStageTitle = existingDeal.values?.stage?.[0]?.title;
+
+              if (currentStageId === NO_SHOW_STAGE_ID && dealId) {
+                // Reset stage from No Show to Discovery Call
+                await attioClient.updateDealStage(dealId, DISCOVERY_CALL_STAGE_ID);
+                stepLogs.push({
+                  name: "Reset Deal Stage (No Show → Discovery Call)",
+                  status: "success",
+                  input: { dealId, previousStage: currentStageTitle },
+                  output: { newStage: "Discovery Call" },
+                  durationMs: Date.now() - stepStartDeal,
+                  timestamp: new Date().toISOString(),
+                });
+              } else {
+                // Deal exists in other stage - skip creation
+                stepLogs.push({
+                  name: "Create Attio Deal (Discovery Call)",
+                  status: "skipped",
+                  input: { personRecordId },
+                  output: { reason: "Deal already exists", currentStage: currentStageTitle, dealId },
+                  durationMs: Date.now() - stepStartDeal,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            } else {
+              // No existing deal - create new one
+              const dealName = bookingData.name || bookingData.email;
+              const dealResult = await attioClient.createDeal({
+                name: dealName,
+                personRecordId,
+                companyRecordId,
+              });
+
+              stepLogs.push({
+                name: "Create Attio Deal (Discovery Call)",
+                status: "success",
+                input: { dealName, personRecordId, companyRecordId },
+                output: dealResult,
+                durationMs: Date.now() - stepStartDeal,
+                timestamp: new Date().toISOString(),
+              });
+            }
           } catch (dealError) {
             stepLogs.push({
               name: "Create Attio Deal (Discovery Call)",

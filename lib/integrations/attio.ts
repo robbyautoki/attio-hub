@@ -345,6 +345,44 @@ export class AttioClient {
       }),
     });
   }
+
+  /**
+   * Find deals by person (associated_people)
+   * Returns deals with their stage info
+   */
+  async findDealsByPerson(personRecordId: string): Promise<{
+    data?: Array<{
+      id?: { record_id?: string };
+      values?: { stage?: Array<{ status_id?: string; title?: string }> };
+    }>;
+  }> {
+    return this.request("/objects/deals/records/query", {
+      method: "POST",
+      body: JSON.stringify({
+        filter: {
+          associated_people: {
+            target_record_id: { "$eq": personRecordId },
+          },
+        },
+      }),
+    });
+  }
+
+  /**
+   * Update deal stage by status ID
+   */
+  async updateDealStage(dealRecordId: string, stageId: string): Promise<unknown> {
+    return this.request(`/objects/deals/records/${dealRecordId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        data: {
+          values: {
+            stage: stageId,
+          },
+        },
+      }),
+    });
+  }
 }
 
 /**
