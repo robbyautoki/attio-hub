@@ -554,16 +554,18 @@ function parseCalcomPayload(payload: Record<string, unknown>): {
 
   if (startTimeRaw) {
     const startDate = new Date(startTimeRaw);
-    // Format: "25. November 2025"
+    // Format: "25. November 2025" (in German timezone)
     datum = startDate.toLocaleDateString("de-DE", {
       day: "numeric",
       month: "long",
       year: "numeric",
+      timeZone: "Europe/Berlin",
     });
-    // Format: "14:30"
+    // Format: "14:30" (in German timezone)
     uhrzeit = startDate.toLocaleTimeString("de-DE", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Europe/Berlin",
     });
   }
 

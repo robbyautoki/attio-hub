@@ -482,10 +482,12 @@ async function sendNoShowEmail(
       day: "numeric",
       month: "long",
       year: "numeric",
+      timeZone: "Europe/Berlin",
     });
     const uhrzeit = startDate.toLocaleTimeString("de-DE", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Europe/Berlin",
     });
 
     const vorname = booking.firstName || firstName || "dort";
@@ -549,6 +551,7 @@ async function sendMeetingRunningEmail(
     const uhrzeit = startDate.toLocaleTimeString("de-DE", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Europe/Berlin",
     });
 
     const vorname = booking.firstName || firstName || "dort";
