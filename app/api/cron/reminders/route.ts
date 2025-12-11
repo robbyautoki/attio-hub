@@ -89,20 +89,25 @@ export async function GET(request: Request) {
           },
         });
 
-        // Log the email
-        await createEmailLog({
-          emailType: "reminder_24h",
-          to: booking.email,
-          subject: "Kleine Erinnerung für Morgen",
-          from: "Robby <robby@notifications.auto.ki>",
-          status: "sent",
-          resendId: extractResendId(response),
-          bookingId: booking.id,
-          userId: booking.userId,
-        });
-
+        // Mark as sent FIRST to prevent duplicate sends if logging fails
         await markReminder24hSent(booking.id);
         results.reminder24h.sent++;
+
+        // Log the email (non-critical - catch errors separately)
+        try {
+          await createEmailLog({
+            emailType: "reminder_24h",
+            to: booking.email,
+            subject: "Kleine Erinnerung für Morgen",
+            from: "Robby <robby@notifications.auto.ki>",
+            status: "sent",
+            resendId: extractResendId(response),
+            bookingId: booking.id,
+            userId: booking.userId,
+          });
+        } catch (logError) {
+          console.error("Failed to create email log:", logError);
+        }
 
         // Send Slack notification for successful reminder
         await sendSlackNotification({
@@ -161,20 +166,25 @@ export async function GET(request: Request) {
           },
         });
 
-        // Log the email
-        await createEmailLog({
-          emailType: "reminder_1h",
-          to: booking.email,
-          subject: "Unser Termin beginnt gleich",
-          from: "Robby <robby@notifications.auto.ki>",
-          status: "sent",
-          resendId: extractResendId(response),
-          bookingId: booking.id,
-          userId: booking.userId,
-        });
-
+        // Mark as sent FIRST to prevent duplicate sends if logging fails
         await markReminder1hSent(booking.id);
         results.reminder1h.sent++;
+
+        // Log the email (non-critical - catch errors separately)
+        try {
+          await createEmailLog({
+            emailType: "reminder_1h",
+            to: booking.email,
+            subject: "Unser Termin beginnt gleich",
+            from: "Robby <robby@notifications.auto.ki>",
+            status: "sent",
+            resendId: extractResendId(response),
+            bookingId: booking.id,
+            userId: booking.userId,
+          });
+        } catch (logError) {
+          console.error("Failed to create email log:", logError);
+        }
 
         // Send Slack notification for successful reminder
         await sendSlackNotification({
