@@ -1,4 +1,5 @@
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
+const NEW_MEETINGS_SLACK_WEBHOOK = process.env.NEW_MEETINGS_SLACK_WEBHOOK_URL;
 
 interface SlackMessage {
   text?: string;
@@ -120,6 +121,99 @@ export function formatExecutionLogForSlack(log: ExecutionLogData): SlackMessage 
     text: `${isSuccess ? "Erfolg" : "Fehler"}: ${log.workflowName}`,
     blocks,
   };
+}
+
+/**
+ * Send a new meeting notification to #new-meetings channel
+ */
+export async function sendNewMeetingNotification(data: {
+  name: string;
+  email: string;
+  datum: string;
+  uhrzeit: string;
+  eventType: string;
+  meetingLink?: string | null;
+}): Promise<boolean> {
+  if (!NEW_MEETINGS_SLACK_WEBHOOK) {
+    console.warn("NEW_MEETINGS_SLACK_WEBHOOK_URL not configured");
+    return false;
+  }
+
+  const fields = [
+    { type: "mrkdwn", text: `*Name:*\n${data.name}` },
+    { type: "mrkdwn", text: `*Email:*\n${data.email}` },
+    { type: "mrkdwn", text: `*Datum:*\n${data.datum}` },
+    { type: "mrkdwn", text: `*Uhrzeit:*\n${data.uhrzeit} Uhr` },
+  ];
+
+  const blocks: unknown[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: "📅 Neuer Termin gebucht",
+        emoji: true,
+      },
+    },
+    {
+      type: "section",
+      fields,
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Terminart:*\n${data.eventType}`,
+      },
+    },
+  ];
+
+  // Add meeting link button if available
+  if (data.meetingLink) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "🔗 Meeting beitreten", emoji: true },
+          url: data.meetingLink,
+          style: "primary",
+        },
+      ],
+    });
+  }
+
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `Gebucht am ${new Date().toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Berlin" })}`,
+      },
+    ],
+  });
+
+  try {
+    const response = await fetch(NEW_MEETINGS_SLACK_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: `📅 Neuer Termin: ${data.name} am ${data.datum} um ${data.uhrzeit} Uhr`,
+        blocks,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("New meetings Slack webhook error:", errorText);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Failed to send new meeting notification:", error);
+    return false;
+  }
 }
 
 /**

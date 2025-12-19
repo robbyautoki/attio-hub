@@ -63,22 +63,22 @@ export async function getBookingByCalcomId(calcomBookingId: string): Promise<Boo
 
 /**
  * Gets bookings that need 24h reminder
- * - Start time is within the next 24-25 hours
+ * - Start time is within 23h50min - 24h10min from now (±10 min around 24h mark)
  * - 24h reminder not sent yet
  * - Status is confirmed
  */
 export async function getBookingsNeedingReminder24h(): Promise<Booking[]> {
   const now = new Date();
-  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const in25h = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+  const in23h50min = new Date(now.getTime() + (23 * 60 + 50) * 60 * 1000);
+  const in24h10min = new Date(now.getTime() + (24 * 60 + 10) * 60 * 1000);
 
   return db
     .select()
     .from(bookings)
     .where(
       and(
-        gte(bookings.startTime, in24h),
-        lte(bookings.startTime, in25h),
+        gte(bookings.startTime, in23h50min),
+        lte(bookings.startTime, in24h10min),
         isNull(bookings.reminder24hSentAt),
         eq(bookings.status, "confirmed")
       )
@@ -87,22 +87,22 @@ export async function getBookingsNeedingReminder24h(): Promise<Booking[]> {
 
 /**
  * Gets bookings that need 1h reminder
- * - Start time is within the next 1-2 hours
+ * - Start time is within 50-70 minutes from now (±10 min around 1h mark)
  * - 1h reminder not sent yet
  * - Status is confirmed
  */
 export async function getBookingsNeedingReminder1h(): Promise<Booking[]> {
   const now = new Date();
-  const in1h = new Date(now.getTime() + 60 * 60 * 1000);
-  const in2h = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const in50min = new Date(now.getTime() + 50 * 60 * 1000);
+  const in70min = new Date(now.getTime() + 70 * 60 * 1000);
 
   return db
     .select()
     .from(bookings)
     .where(
       and(
-        gte(bookings.startTime, in1h),
-        lte(bookings.startTime, in2h),
+        gte(bookings.startTime, in50min),
+        lte(bookings.startTime, in70min),
         isNull(bookings.reminder1hSentAt),
         eq(bookings.status, "confirmed")
       )

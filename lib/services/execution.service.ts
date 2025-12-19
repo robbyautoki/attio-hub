@@ -12,7 +12,7 @@ import { createBooking, markConfirmationSent } from "./booking.service";
 import { createAttioClient } from "@/lib/integrations/attio";
 import { createKlaviyoClient } from "@/lib/integrations/klaviyo";
 import { createResendClient } from "@/lib/integrations/resend";
-import { sendSlackNotification } from "@/lib/integrations/slack";
+import { sendSlackNotification, sendNewMeetingNotification } from "@/lib/integrations/slack";
 import { createEmailLog, extractResendId } from "./email-log.service";
 
 export type ExecutionStatus = "pending" | "running" | "success" | "failed";
@@ -517,11 +517,23 @@ export async function executeCalcomWorkflow(
     // Update workflow stats
     await incrementExecutionStats(workflow.id, !hasCriticalFailure);
 
-    // Send compact Slack notification
+    // Send compact Slack notification to logs
     const emoji = finalStatus === "success" ? "✅" : "❌";
     await sendSlackNotification({
       text: `${emoji} ${workflow.name}: ${bookingData.firstName || "Unbekannt"} (${bookingData.email})`,
     });
+
+    // Send new meeting notification to #new-meetings channel
+    if (finalStatus === "success" && bookingData.email && bookingData.datum && bookingData.uhrzeit) {
+      await sendNewMeetingNotification({
+        name: bookingData.name || bookingData.firstName || "Unbekannt",
+        email: bookingData.email,
+        datum: bookingData.datum,
+        uhrzeit: bookingData.uhrzeit,
+        eventType: bookingData.eventType || "Discovery Call",
+        meetingLink: bookingData.meetingLink,
+      });
+    }
   } catch (error) {
     // Handle unexpected errors
     const durationMs = Date.now() - startTime;
