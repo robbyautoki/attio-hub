@@ -60,6 +60,18 @@ const WORKFLOW_TEMPLATES = [
     },
     requiredIntegrations: ["attio", "slack"],
   },
+  {
+    id: "webflow-lead-sync",
+    name: "Webflow → Klaviyo Lead-Sync",
+    description:
+      "Wenn jemand ein Formular auf Webflow ausfüllt, wird automatisch ein Profil in Klaviyo erstellt und zur Liste hinzugefügt.",
+    triggerType: "webhook",
+    triggerConfig: {
+      provider: "webflow",
+      fixedWebhookPath: "lead-sync",
+    },
+    requiredIntegrations: ["klaviyo"],
+  },
 ];
 
 export default function NewWorkflowPage() {
